@@ -7,8 +7,11 @@
  *   - Never intercepts POST (message / upload calls pass straight through).
  *   - Network-first with cache fallback, so a stale shell is never served when
  *     the origin is reachable.
+ *   - `cache: 'no-store'` on the network fetch so a fresh deploy is served
+ *     immediately (GitHub Pages sets max-age=600, which would otherwise make
+ *     the browser keep serving the previous bundle for up to 10 minutes).
  */
-const CACHE = 'sophia-client-v1';
+const CACHE = 'sophia-client-v2';
 const SHELL = [
   './',
   './index.html',
@@ -17,6 +20,8 @@ const SHELL = [
   './css/styles.css',
   './js/crypto.js',
   './js/channels.js',
+  './js/markdown.js',
+  './js/identity.js',
   './js/auth.js',
   './js/chat.js',
   './js/app.js',
@@ -42,7 +47,7 @@ self.addEventListener('fetch', (event) => {
   if (url.origin !== self.location.origin) return; // never touch cross-origin (Sophia API)
 
   event.respondWith(
-    fetch(req)
+    fetch(req, { cache: 'no-store' })
       .then((resp) => {
         if (resp && resp.ok) {
           const clone = resp.clone();
