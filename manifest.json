@@ -1,0 +1,18 @@
+{
+  "name": "TrueSight Ops Console",
+  "short_name": "TS Ops",
+  "description": "First-party client for TrueSight DAO agents (Sophia).",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#1e1f22",
+  "theme_color": "#5865f2",
+  "icons": [
+    {
+      "src": "icons/icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any"
+    }
+  ]
+}

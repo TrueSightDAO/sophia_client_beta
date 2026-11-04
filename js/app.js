@@ -1,5 +1,6 @@
 /**
- * app.js — bootstrap: load config, wire identity + channel list + chat pane.
+ * app.js — bootstrap: load config, wire identity + channel list + chat pane,
+ * attachments, and reactions.
  */
 (function () {
   'use strict';
@@ -7,12 +8,21 @@
   let currentChannelId = null;
   let currentRole = 'guest';
   let creds = null; // { publicKey, privateKey }
+  let pendingFiles = [];
+
+  const REACTIONS = ['👍', '👀', '✅', '❌'];
 
   function el(id) { return document.getElementById(id); }
 
   function fingerprint(pub) {
     if (!pub) return '';
     return pub.replace(/[\r\n=]/g, '').slice(0, 12);
+  }
+
+  function escapeHtml(s) {
+    return String(s).replace(/[&<>"']/g, (c) => (
+      { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]
+    ));
   }
 
   async function loadConfig() {
@@ -38,7 +48,7 @@
         item.className = 'channel';
         item.dataset.channelId = ch.id;
         item.textContent = '# ' + ch.name;
-        item.addEventListener('click', () => selectChannel(ch.id, config));
+        item.addEventListener('click', () => selectChannel(ch.id));
         sidebar.appendChild(item);
       });
     });
@@ -72,17 +82,98 @@
     });
   }
 
-  function appendMessage(who, text) {
+  /** Render message text, converting known image/file URLs into inline previews. */
+  function renderContent(text) {
+    const safe = escapeHtml(text);
+    const attachments = window.SophiaChat.detectAttachments(text, window.AppConfig.sophiaBaseUrl);
+    if (!attachments.length) return safe;
+
+    // Replace each detected URL's escaped form with an <img>/link. EscapeHtml turns
+    // "/uploads/x.png" into "/uploads/x.png" (no change) and "http://" stays safe;
+    // we swap the plain URL back in carefully via a placeholder approach.
+    let html = safe;
+    attachments.forEach((att) => {
+      const escapedUrl = escapeHtml(att.url);
+      const tag = att.type === 'image'
+        ? '<img class="attach" src="' + escapedUrl + '" alt="attachment" loading="lazy" />'
+        : '<a class="attach-link" href="' + escapedUrl + '" target="_blank" rel="noopener">' + escapedUrl + '</a>';
+      // Replace the first occurrence of the escaped URL (or its /uploads/ original)
+      html = html.replace(escapedUrl, tag);
+      if (att.url.startsWith((window.AppConfig.sophiaBaseUrl || '').replace(/\/+$/, ''))) {
+        const rel = att.url.replace((window.AppConfig.sophiaBaseUrl || '').replace(/\/+$/, ''), '');
+        html = html.replace(escapeHtml(rel), tag);
+      }
+    });
+    return html;
+  }
+
+  function appendMessage(who, text, opts) {
+    opts = opts || {};
     const box = el('messages');
     const row = document.createElement('div');
     row.className = 'msg ' + who;
     const content = document.createElement('div');
     content.className = 'bubble';
-    content.textContent = text;
+    if (who === 'system') {
+      content.textContent = text;
+    } else {
+      content.innerHTML = renderContent(text);
+    }
     row.appendChild(content);
+
+    if (who === 'sophia' && opts.reactive !== false) {
+      row.appendChild(buildReactionBar(text));
+    }
+
     box.appendChild(row);
     box.scrollTop = box.scrollHeight;
     return content;
+  }
+
+  // ---- reactions (client-side, persisted in localStorage per channel) ----
+
+  function reactionKey(text) {
+    // Stable-ish key from the message content, so reactions survive a reload.
+    let h = 0;
+    for (let i = 0; i < text.length; i++) h = (h * 31 + text.charCodeAt(i)) | 0;
+    return (h >>> 0).toString(36);
+  }
+
+  function readReactions(channelId, key) {
+    try {
+      const raw = localStorage.getItem('sophia_reactions_' + channelId);
+      const map = raw ? JSON.parse(raw) : {};
+      return map[key] || {};
+    } catch (e) { return {}; }
+  }
+
+  function writeReactions(channelId, key, map) {
+    try {
+      const raw = localStorage.getItem('sophia_reactions_' + channelId);
+      const all = raw ? JSON.parse(raw) : {};
+      all[key] = map;
+      localStorage.setItem('sophia_reactions_' + channelId, JSON.stringify(all));
+    } catch (e) { /* quota — non-fatal */ }
+  }
+
+  function buildReactionBar(text) {
+    const bar = document.createElement('div');
+    bar.className = 'reactions';
+    const key = reactionKey(text);
+    const state = currentChannelId ? readReactions(currentChannelId, key) : {};
+    REACTIONS.forEach((emoji) => {
+      const btn = document.createElement('button');
+      btn.className = 'reaction' + (state[emoji] ? ' active' : '');
+      btn.textContent = emoji;
+      btn.addEventListener('click', () => {
+        const cur = readReactions(currentChannelId, key);
+        if (cur[emoji]) delete cur[emoji]; else cur[emoji] = true;
+        writeReactions(currentChannelId, key, cur);
+        btn.classList.toggle('active', !!cur[emoji]);
+      });
+      bar.appendChild(btn);
+    });
+    return bar;
   }
 
   function setAuthBanner(text, kind) {
@@ -112,22 +203,40 @@
   async function onSend() {
     const input = el('messageInput');
     const text = input.value.trim();
-    if (!text || !currentChannelId) return;
+    if ((!text && !pendingFiles.length) || !currentChannelId) return;
     if (!creds) { setAuthBanner('Not connected — connect first.', 'error'); return; }
+
     input.value = '';
-    appendMessage('you', text);
-    const thinking = appendMessage('sophia', '🔄 Thinking…');
+    const files = pendingFiles.slice();
+    pendingFiles = [];
+    updateAttachLabel();
+
+    if (text) appendMessage('you', text);
+    if (files.length) appendMessage('you', '📎 ' + files.map((f) => f.name).join(', '));
+
+    const thinking = appendMessage('sophia', '🔄 Thinking…', { reactive: false });
+
     try {
-      await window.SophiaChat.sendMessage(currentChannelId, text, creds, {
+      const cb = {
         onEvent(evt) {
           if (evt.type === 'done' && evt.response != null) {
-            thinking.textContent = evt.response;
+            thinking.innerHTML = renderContent(evt.response);
+          } else if (evt.type === 'status') {
+            thinking.textContent = '🔄 ' + ((evt.message) || 'processing…');
           }
         },
         onDone(t) {
           if (!t) thinking.textContent = '(no reply)';
+          if (thinking.textContent && thinking.textContent.indexOf('🔄') === 0 && t) {
+            thinking.innerHTML = renderContent(t);
+          }
         },
-      });
+      };
+      if (files.length) {
+        await window.SophiaChat.sendMessageWithFiles(currentChannelId, text, files, creds, cb);
+      } else {
+        await window.SophiaChat.sendMessage(currentChannelId, text, creds, cb);
+      }
     } catch (e) {
       const msg = e && e.message ? e.message : String(e);
       if (/403|governor/i.test(msg)) {
@@ -136,6 +245,17 @@
       thinking.textContent = 'Error: ' + msg;
     }
     el('messages').scrollTop = el('messages').scrollHeight;
+  }
+
+  function updateAttachLabel() {
+    el('attachLabel').textContent = pendingFiles.length ? '📎 ' + pendingFiles.length : '📎';
+  }
+
+  function onFilesChosen() {
+    const input = el('fileInput');
+    pendingFiles = Array.from(input.files || []);
+    input.value = '';
+    updateAttachLabel();
   }
 
   async function boot() {
@@ -157,6 +277,8 @@
   window.addEventListener('DOMContentLoaded', () => {
     el('connectBtn').addEventListener('click', onConnect);
     el('sendBtn').addEventListener('click', onSend);
+    el('attachBtn').addEventListener('click', () => el('fileInput').click());
+    el('fileInput').addEventListener('change', onFilesChosen);
     el('messageInput').addEventListener('keydown', (e) => {
       if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); onSend(); }
     });

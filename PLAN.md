@@ -80,23 +80,24 @@ does not require Gary's governor key → report.
 ## Resume tracker
 
 ```
-RESUME HERE → PR1 (auth + channel shell + SSE chat)
+RESUME HERE → PR4 (tiered auth — requires server endpoint, gated)
 PR0  scaffold+config+plan ......... ☑ done
-PR1  auth + shell + chat .......... ☐ in progress   <-- RESUME HERE
-PR2  attachments ................... ☐
-PR3  reactions / go-signal ........ ☐
-PR4  tiered auth (server) ......... ☐ gate: server endpoint
-PR5  PWA + fork/promote ........... ☐ gate: UAT
+PR1  auth + shell + chat .......... ☑ done (v1, 2026-10-28)
+PR2  attachments ................... ☑ done (send /chat/upload + receive render)
+PR3  reactions / go-signal ........ ☑ done (client-side emoji reactions)
+PR4  tiered auth (server) ......... ☐ gate: server POST /auth/tier (not built/deployed)
+PR5  PWA + fork/promote ........... ◐ PWA assets shipped (manifest + SW); fork/promote gate: GitHub
 ```
 
 ## UAT phase (human, on live surfaces)
 
 **R1 (self) — already performed by the builder before handing off:**
-- [ ] `npm test` green (crypto round-trip, canonical JSON, SSE parse, channel visibility).
+- [ ] `npm test` green (crypto round-trip, canonical JSON, SSE parse, channel visibility,
+  attachment detection, signed-payload shape).
 - [ ] Crypto-vs-server proof: a fresh (non-governor) key POSTing a signed message to `/chat`
   returns **403 (Access restricted to authorized governors)**, not **401 (Invalid signature)** —
   proves the signature is verified, not rejected. (No governor key needed for this check.)
-  **PASSED 2026-10-28 via `scripts/self-uat.mjs`.**
+  **PASSED 2026-10-28 via `scripts/self-uat.mjs` — `/chat` AND `/chat/upload` both 403, not 401.**
 - [ ] Local static serve (`./serve.sh`) loads `index.html`, renders the channel list from
   `config.json`, and surfaces the auth banner.
 
@@ -104,10 +105,14 @@ PR5  PWA + fork/promote ........... ☐ gate: UAT
 1. Open `http://localhost:8000` (after `./serve.sh`).
 2. Confirm the app reuses your existing identity — you should NOT be asked to make a new key;
    the "linked identity" should show your existing public key fingerprint.
-3. Pick a channel → the client signs the challenge and authenticates (no error).
+3. Pick a channel → the client signs and sends (no error).
 4. Send a test message → watch Sophia's reply stream in (SSE), then reload and confirm history
    persists via `GET /session`.
-5. Pass = you can converse with Sophia turn-by-turn in the client. Then we proceed to PR2/PR3.
+5. (PR2) Attach a file → `/chat/upload` processes it and Sophia replies; any image URL in a
+   reply renders inline.
+6. (PR3) Click 👍 on a reply → reaction persists across reload.
+7. Pass = you can converse with Sophia turn-by-turn, with attachments and reactions. Then we
+   decide on PR4 (server `POST /auth/tier`) and PR5 fork/promote.
 
 Prod/network changes, the `POST /auth/tier` server endpoint, and PWA fork/promote are
 **always-stop** gates — never self-executed.

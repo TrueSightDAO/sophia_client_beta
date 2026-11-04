@@ -104,5 +104,98 @@
     return resp.json();
   }
 
-  window.SophiaChat = { sendMessage, loadHistory, parseSSE, sessionIdFor };
+  /**
+   * POST a signed message + one or more file attachments via `/chat/upload`
+   * (multipart). Signed headers carry the payload (`X-Payload` JSON string +
+   * `X-Signature`) and `X-Public-Key`, mirroring auth.js::signMessage.
+   * @param {FileList|Array} files
+   * @param {object} callbacks {onEvent(evt), onDone(text), onError(err)}
+   */
+  async function sendMessageWithFiles(channelId, message, files, creds, callbacks) {
+    const { body, publicKey } = await window.SophiaAuth.signMessage(message || '');
+    const url = window.SophiaAuth.baseUrl() + '/chat/upload';
+
+    const form = new FormData();
+    const list = Array.from(files || []);
+    list.forEach((f) => form.append('files', f));
+
+    const resp = await fetch(url, {
+      method: 'POST',
+      headers: {
+        'X-Public-Key': publicKey,
+        'X-Payload': JSON.stringify(body.payload),
+        'X-Signature': body.signature,
+        'X-Session-Id': sessionIdFor(channelId),
+      },
+      body: form,
+    });
+
+    if (!resp.ok || !resp.body) {
+      let detail = 'HTTP ' + resp.status;
+      try {
+        const j = await resp.json();
+        if (j && j.detail) detail = j.detail;
+      } catch (e) { /* ignore */ }
+      throw new Error(detail);
+    }
+
+    const reader = resp.body.getReader();
+    const decoder = new TextDecoder();
+    let buffer = '';
+    let finalText = null;
+
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      buffer += decoder.decode(value, { stream: true });
+      const events = parseSSE(buffer);
+      const lastNewline = buffer.lastIndexOf('\n\n');
+      if (lastNewline >= 0) buffer = buffer.slice(lastNewline + 2);
+      for (const evt of events) {
+        if (callbacks.onEvent) callbacks.onEvent(evt);
+        if (evt.type === 'done' && evt.response != null) finalText = evt.response;
+      }
+    }
+
+    if (callbacks.onDone) callbacks.onDone(finalText || '');
+    return finalText || '';
+  }
+
+  /**
+   * Find renderable attachments in a reply string. Returns a list of
+   * {type:'image'|'file', url} resolved against the Sophia base URL.
+   */
+  function detectAttachments(text, baseUrl) {
+    const out = [];
+    const base = (baseUrl || '').replace(/\/+$/, '');
+    const seen = new Set();
+
+    const markdown = /!\[[^\]]*\]\((https?:\/\/[^\s)]+|\/uploads\/[^\s)]+)\)/g;
+    const bareUpload = /(^|[\s(])(\/uploads\/[A-Za-z0-9._-]+)/g;
+    const bareHttp = /(https?:\/\/[^\s)]+\.(?:png|jpe?g|gif|webp|svg)(?:\?[^\s)]*)?)/gi;
+
+    const push = (raw, type) => {
+      let u = raw;
+      if (u.startsWith('/')) u = base + u;
+      if (seen.has(u)) return;
+      seen.add(u);
+      out.push({ type, url: u });
+    };
+
+    let m;
+    while ((m = markdown.exec(text)) !== null) push(m[1], 'image');
+    while ((m = bareUpload.exec(text)) !== null) push(m[2], 'image');
+    while ((m = bareHttp.exec(text)) !== null) push(m[1], 'image');
+
+    return out;
+  }
+
+  window.SophiaChat = {
+    sendMessage,
+    sendMessageWithFiles,
+    loadHistory,
+    parseSSE,
+    detectAttachments,
+    sessionIdFor,
+  };
 })();

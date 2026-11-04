@@ -97,7 +97,7 @@ html, body {
 .msg.sophia .bubble { background: var(--sophia); color: var(--text); }
 .msg.system .bubble { background: transparent; color: var(--muted); font-size: 12px; }
 
-.composer { display: flex; gap: 8px; padding: 12px 16px; border-top: 1px solid #26272b; }
+.composer { display: flex; gap: 8px; padding: 12px 16px; border-top: 1px solid #26272b; align-items: flex-end; }
 .composer textarea {
   flex: 1;
   resize: none;
@@ -118,4 +118,43 @@ html, body {
   padding: 0 18px;
   cursor: pointer;
   font-weight: 600;
+  height: 38px;
 }
+.composer .attach {
+  background: transparent;
+  color: var(--muted);
+  border: 1px solid #3f4147;
+  border-radius: 6px;
+  padding: 8px 10px;
+  cursor: pointer;
+  height: 38px;
+}
+.composer .attach:hover { color: var(--text); background: #383a40; }
+
+.msg .bubble img.attach {
+  max-width: 100%;
+  max-height: 280px;
+  border-radius: 8px;
+  margin-top: 8px;
+  display: block;
+}
+.msg .bubble a.attach-link {
+  color: #8ab4ff;
+  word-break: break-all;
+  display: block;
+  margin-top: 6px;
+}
+
+.reactions { display: flex; gap: 4px; align-items: center; padding-left: 2px; }
+.reaction {
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: 12px;
+  padding: 1px 6px;
+  font-size: 14px;
+  cursor: pointer;
+  color: var(--muted);
+}
+.reaction:hover { background: #3a3b45; }
+.reaction.active { background: #2b3a55; border-color: var(--accent); color: #fff; }
+

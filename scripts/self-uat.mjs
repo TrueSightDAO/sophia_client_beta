@@ -66,7 +66,26 @@ const signature = await signPayload(privateKey, payload);
 console.log('Sophia instance:', BASE);
 console.log('Fresh public key (SPKI b64, first 16):', publicKey.slice(0, 16) + '…');
 
-const resp = await fetch(BASE + '/chat', {
+function judge(name, resp, body) {
+  console.log(`\n[${name}] HTTP ${resp.status}: ${body}`);
+  if (resp.status === 403) {
+    console.log(`✅ ${name} PASS — signature verified; server rejected the non-governor key.`);
+    return 0;
+  }
+  if (resp.status === 401) {
+    console.log(`❌ ${name} FAIL — "Invalid signature": crypto does NOT match the server.`);
+    return 1;
+  }
+  if (resp.status === 200) {
+    console.log(`⚠️ ${name} UNEXPECTED — a fresh key authenticated as governor. Investigate.`);
+    return 2;
+  }
+  console.log(`⚠️ ${name} unexpected status. Inspect above.`);
+  return 2;
+}
+
+// Probe 1 — signed text message on /chat.
+const r1 = await fetch(BASE + '/chat', {
   method: 'POST',
   headers: {
     'Content-Type': 'application/json',
@@ -75,24 +94,36 @@ const resp = await fetch(BASE + '/chat', {
   },
   body: JSON.stringify({ payload, signature }),
 });
+let b1 = '';
+try { b1 = JSON.stringify(await r1.json()); } catch { b1 = '(non-JSON)'; }
+let exit = judge('/chat', r1, b1);
 
-let body = '';
-try { body = JSON.stringify(await resp.json()); } catch { body = '(non-JSON)'; }
+// Probe 2 — signed multipart upload on /chat/upload (same payload + X-Signature).
+const payload2 = {
+  message: 'self-uat: upload probe',
+  timestamp: new Date().toISOString(),
+  nonce: crypto.randomUUID(),
+  do_not_publish: false,
+};
+const signature2 = await signPayload(privateKey, payload2);
+const form = new FormData();
+form.append('files', new Blob(['self-uat'], { type: 'text/plain' }), 'self-uat.txt');
+const r2 = await fetch(BASE + '/chat/upload', {
+  method: 'POST',
+  headers: {
+    'X-Public-Key': publicKey,
+    'X-Payload': JSON.stringify(payload2),
+    'X-Signature': signature2,
+    'X-Session-Id': 'client:self-uat',
+  },
+  body: form,
+});
+let b2 = '';
+try { b2 = JSON.stringify(await r2.json()); } catch { b2 = '(non-JSON)'; }
+const exit2 = judge('/chat/upload', r2, b2);
 
-console.log('HTTP status:', resp.status);
-console.log('Body:', body);
+console.log('\n' + (exit === 0 && exit2 === 0
+  ? '✅ ALL PASS — client crypto matches the brain for both text and attachment paths.'
+  : '⚠️ See failures above.'));
+process.exit(exit === 0 && exit2 === 0 ? 0 : 1);
 
-if (resp.status === 403) {
-  console.log('\n✅ PASS — signature verified; server correctly rejected the non-governor key.');
-  console.log('   The client crypto matches the brain. (Remaining auth leg requires a governor key.)');
-  process.exit(0);
-} else if (resp.status === 401) {
-  console.log('\n❌ FAIL — "Invalid signature": the client crypto does NOT match the server.');
-  process.exit(1);
-} else if (resp.status === 200) {
-  console.log('\n⚠️ UNEXPECTED — a freshly generated key authenticated as a governor. Investigate.');
-  process.exit(2);
-} else {
-  console.log('\n⚠️ Unexpected status. Inspect body above.');
-  process.exit(2);
-}
