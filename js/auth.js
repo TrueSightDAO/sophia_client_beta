@@ -1,20 +1,23 @@
 /**
- * auth.js — RSA proof-of-possession identity + per-message signing.
+ * auth.js — RSA proof-of-possession → tiered JWT, against the configured Sophia.
  *
- * v1 uses the brain's signed-payload path on `/chat` directly (the oracle
- * pattern) — there is no separate JWT step, and no `/auth/challenge` call.
- * (Note: `sophia.truesight.me/auth/challenge` is shadowed by nginx `/auth/` →
- * port 8002, so it is not reachable from the public host.)
+ * Flow (tiered auth, /auth-tier):
+ *   1. Reuse the DAO keypair from localStorage (`publicKey` / `privateKey`) if
+ *      present (identity shared with dapp / capoeira / oracle), else generate one.
+ *   2. Sign a challenge `{ timestamp, nonce }` and POST `/auth-tier` with
+ *      `X-Public-Key` + `{ payload, signature }`.
+ *   3. The brain resolves the ledger tier (guest/member/sentinel/governor) and
+ *      returns a JWT whose `author_role` claim carries that tier. Subsequent
+ *      requests send it as `Authorization: Bearer`.
  *
- *   - Reuse the DAO keypair from localStorage (`publicKey` / `privateKey`),
- *     shared with dapp / capoeira / oracle; generate only if absent.
- *   - Each message is signed as `{ message, timestamp, nonce, do_not_publish }`
- *     and POSTed to `/chat` with `X-Public-Key` + `{ payload, signature }`.
- *   - The brain's `verify_payload` gates on governor (403 for non-governor);
- *     the member/guest tiers need a server-side `POST /auth/tier` (PR4).
+ * The JWT is also usable on `/chat` (text), `/chat/upload` (attachments), and
+ * `/session` (history) — all accept `Authorization: Bearer`.
  */
 (function () {
   'use strict';
+
+  const TOKEN_KEY = 'sophia_client_jwt';
+  const ROLE_KEY = 'sophia_client_role';
 
   function baseUrl() {
     const cfg = window.AppConfig || {};
@@ -48,10 +51,54 @@
     return Date.now().toString(36) + '-' + Math.random().toString(36).slice(2, 12);
   }
 
+  function getToken() {
+    return sessionStorage.getItem(TOKEN_KEY) || null;
+  }
+
+  function getRole() {
+    return sessionStorage.getItem(ROLE_KEY) || 'guest';
+  }
+
+  function isAuthenticated() {
+    return !!getToken();
+  }
+
+  function clearAuth() {
+    sessionStorage.removeItem(TOKEN_KEY);
+    sessionStorage.removeItem(ROLE_KEY);
+  }
+
   /**
-   * Build the signed request body for a chat message.
-   * @returns {Promise<{body:{payload:object, signature:string}, publicKey:string}>}
+   * Authenticate via /auth-tier: sign a challenge, exchange it for a JWT whose
+   * author_role is the ledger-resolved tier for this key.
+   * @returns {Promise<{token:string, role:string, publicKey:string}>}
    */
+  async function authenticate() {
+    const { publicKey, privateKey } = await ensureKeypair();
+    const payload = { timestamp: new Date().toISOString(), nonce: newNonce() };
+    const signature = await window.SophiaCrypto.signPayload(privateKey, payload);
+
+    const resp = await fetch(baseUrl() + '/auth-tier', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'X-Public-Key': publicKey },
+      body: JSON.stringify({ payload, signature }),
+    });
+
+    if (!resp.ok) {
+      let detail = 'HTTP ' + resp.status;
+      try { const j = await resp.json(); if (j && j.detail) detail = j.detail; } catch (e) { /* non-JSON */ }
+      throw new Error(detail);
+    }
+
+    const body = await resp.json();
+    if (!body.token) throw new Error('No token returned from /auth-tier');
+    const role = body.author_role || 'guest';
+    sessionStorage.setItem(TOKEN_KEY, body.token);
+    sessionStorage.setItem(ROLE_KEY, role);
+    return { token: body.token, role, publicKey };
+  }
+
+  /** Build a signed request body (used by the multipart upload path). */
   async function signMessage(message, doNotPublish = false) {
     const { publicKey, privateKey } = await ensureKeypair();
     const payload = {
@@ -68,6 +115,11 @@
     baseUrl,
     ensureKeypair,
     getStoredPublicKey,
+    authenticate,
     signMessage,
+    getToken,
+    getRole,
+    isAuthenticated,
+    clearAuth,
   };
 })();

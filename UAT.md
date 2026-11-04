@@ -24,7 +24,6 @@ states the **surface**, **what to do**, **what to expect**, and the **pass crite
 | 2.2 | [S] | Open app with no key | "Connect identity" button shown; identity shows `(none)` | ✅ |
 | 2.3 | [S] | Click Connect | existing key reused (no new key), identity shows `identity: <12-char fingerprint>` | ✅ |
 | 2.4 | [H] | Connect as **Gary's governor key** | no 403; can send + receive | ⏳ |
-
 ## 3. Channel visibility (role model)
 
 | # | Tier | Action | Expect | Pass |
@@ -47,6 +46,7 @@ states the **surface**, **what to do**, **what to expect**, and the **pass crite
 | # | Tier | Action | Expect | Pass |
 |---|---|---|---|---|
 | 5.1 | [H] | Send a message | your bubble appears, then Sophia's reply streams in and renders | ⏳ |
+| 5.1a | [S] | Send via a server-minted JWT (Bearer, `create_jwt` on the brain box) | **VERIFIED 2026-11-04**: `HTTP 200`, SSE `token`+`done`, Sophia replied `pong` | ✅ |
 | 5.2 | [H] | During a tool-heavy turn | `🔧 <tool>` progress + `token` streaming, then final answer | ⏳ |
 | 5.3 | [H] | Reload the page, reselect channel | history reloads from `GET /session` | ⏳ |
 | 5.4 | [S] | Send with a non-governor key | graceful error bubble (no JS exception) | ✅ |

@@ -7,7 +7,8 @@
 
   let currentChannelId = null;
   let currentRole = 'guest';
-  let creds = null; // { publicKey, privateKey }
+  let creds = null; // { publicKey, privateKey } (for signed upload path)
+  let token = null; // JWT from /auth-tier (for text chat)
   let pendingFiles = [];
   let config = null;
 
@@ -28,6 +29,31 @@
 
   function isPrivileged(role) {
     return role === 'governor' || role === 'sentinel';
+  }
+
+  function channelFromHash() {
+    const h = (window.location.hash || '').replace(/^#/, '');
+    if (h.indexOf('channel=') === 0) {
+      try { return decodeURIComponent(h.slice('channel='.length)); } catch (e) { return null; }
+    }
+    return null;
+  }
+
+  function setChannelHash(channelId) {
+    const target = '#channel=' + encodeURIComponent(channelId);
+    if (window.location.hash !== target) {
+      history.replaceState(null, '', target);
+    }
+  }
+
+  function selectChannelOrFirst() {
+    const wanted = channelFromHash();
+    const visible = window.SophiaChannels.visibleChannels(config, currentRole);
+    if (wanted && visible.some((c) => c.id === wanted)) {
+      selectChannel(wanted);
+    } else if (visible.length) {
+      selectChannel(visible[0].id);
+    }
   }
 
   async function loadConfig() {
@@ -135,6 +161,7 @@
 
   async function selectChannel(channelId) {
     currentChannelId = channelId;
+    setChannelHash(channelId);
     document.querySelectorAll('.channel').forEach((n) => n.classList.toggle('active', n.dataset.channelId === channelId));
     el('chatHeader').textContent = '#' + channelId;
     el('messages').innerHTML = '';
@@ -264,15 +291,16 @@
 
   async function onConnect() {
     try {
+      const auth = await window.SophiaAuth.authenticate();
+      token = auth.token;
       creds = await window.SophiaAuth.ensureKeypair();
-      currentRole = 'governor'; // v1: only governor keys pass verify_payload on /chat
+      currentRole = auth.role;
       renderChannelList();
       el('identity').textContent = 'identity: ' + fingerprint(creds.publicKey);
       el('connectBtn').hidden = true;
       el('composer').hidden = false;
-      setAuthBanner('Signed in as governor · identity ' + fingerprint(creds.publicKey), 'ok');
-      const first = window.SophiaChannels.visibleChannels(config, currentRole)[0];
-      if (first) selectChannel(first.id);
+      setAuthBanner('Signed in as ' + auth.role + ' · identity ' + fingerprint(creds.publicKey), 'ok');
+      selectChannelOrFirst();
     } catch (e) {
       setAuthBanner('Identity failed: ' + e.message, 'error');
     }
@@ -319,7 +347,7 @@
     const input = el('messageInput');
     const text = input.value.trim();
     if ((!text && !pendingFiles.length) || !currentChannelId) return;
-    if (!creds) { setAuthBanner('Not connected — connect first.', 'error'); return; }
+    if (!token || !creds) { setAuthBanner('Not connected — connect first.', 'error'); return; }
 
     input.value = '';
     const files = pendingFiles.slice();
@@ -337,12 +365,12 @@
       if (files.length) {
         await window.SophiaChat.sendMessageWithFiles(currentChannelId, text, files, creds, cb);
       } else {
-        await window.SophiaChat.sendMessage(currentChannelId, text, creds, cb);
+        await window.SophiaChat.sendMessage(currentChannelId, text, token, cb);
       }
     } catch (e) {
       const msg = e && e.message ? e.message : String(e);
-      if (/403|governor/i.test(msg)) {
-        setAuthBanner('Send rejected — this key is not a registered governor. ' + msg, 'error');
+      if (/403|governor|sentinel/i.test(msg)) {
+        setAuthBanner('Send rejected — insufficient rights for this key. ' + msg, 'error');
       }
       thinking.textContent = 'Error: ' + msg;
     }
@@ -391,6 +419,12 @@
     el('newCategoryBtn').addEventListener('click', openCategoryModal);
     el('categoryCreateBtn').addEventListener('click', onCreateCategory);
     el('categoryCancelBtn').addEventListener('click', closeCategoryModal);
+    window.addEventListener('hashchange', () => {
+      const wanted = channelFromHash();
+      if (wanted && wanted !== currentChannelId && creds) {
+        selectChannel(wanted);
+      }
+    });
     boot();
   });
 })();

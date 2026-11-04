@@ -41,24 +41,23 @@
   }
 
   /**
-   * POST a signed message and stream the reply.
+   * POST a message (JWT-authenticated) and stream the reply.
    * @param {string} channelId
    * @param {string} message
-   * @param {object} creds {publicKey, privateKey}
+   * @param {string} token — JWT from /auth-tier
    * @param {object} callbacks {onEvent(evt), onDone(text), onError(err)}
    */
-  async function sendMessage(channelId, message, creds, callbacks) {
-    const { body, publicKey } = await window.SophiaAuth.signMessage(message);
+  async function sendMessage(channelId, message, token, callbacks) {
     const url = window.SophiaAuth.baseUrl() + '/chat';
 
     const resp = await fetch(url, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'X-Public-Key': publicKey,
+        'Authorization': 'Bearer ' + token,
         'X-Session-Id': sessionIdFor(channelId),
       },
-      body: JSON.stringify(body),
+      body: JSON.stringify({ message }),
     });
 
     if (!resp.ok || !resp.body) {
