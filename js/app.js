@@ -608,6 +608,16 @@
     updateAttachLabel();
   }
 
+  function onPaste(e) {
+    const cd = e.clipboardData || (window.clipboardData || null);
+    if (!cd || !cd.items) return;
+    const files = window.SophiaChat.imageFilesFromClipboardItems(cd.items);
+    if (!files.length) return;
+    e.preventDefault();
+    pendingFiles = pendingFiles.concat(files);
+    updateAttachLabel();
+  }
+
   async function boot() {
     try {
       config = await loadConfig();
@@ -633,6 +643,7 @@
     el('messageInput').addEventListener('keydown', (e) => {
       if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) { e.preventDefault(); onSend(); }
     });
+    el('messageInput').addEventListener('paste', onPaste);
     el('messageInput').addEventListener('input', autoResizeTextarea);
     el('newChannelBtn').addEventListener('click', openNewChannelModal);
     el('channelCreateBtn').addEventListener('click', onCreateChannel);
