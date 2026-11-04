@@ -146,6 +146,34 @@ html, body {
 }
 .modal-actions button.send { background: var(--accent); border-color: var(--accent); color: #fff; }
 
+.ctx-menu {
+  position: fixed;
+  z-index: 20;
+  background: #1e1f22;
+  border: 1px solid #3f4147;
+  border-radius: 6px;
+  padding: 4px;
+  min-width: 160px;
+  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.4);
+}
+.ctx-menu[hidden] { display: none; }
+.ctx-menu .ctx-item {
+  display: block;
+  width: 100%;
+  text-align: left;
+  background: transparent;
+  border: none;
+  color: var(--text);
+  padding: 7px 10px;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 13px;
+  font-family: inherit;
+}
+.ctx-menu .ctx-item:hover { background: var(--accent); color: #fff; }
+.ctx-menu .ctx-item.danger { color: var(--err); }
+.ctx-menu .ctx-item.danger:hover { background: var(--err); color: #fff; }
+
 .chat { display: flex; flex-direction: column; background: var(--panel); min-height: 0; overflow: hidden; }
 .chat-header {
   padding: 14px 16px;

@@ -82,4 +82,31 @@ describe('channel management', () => {
     const all = Ch.allChannels(config);
     expect(all.some((c: any) => c.categoryName === 'Brazil' && c.name === 'sunmint-sigs')).toBe(true);
   });
+
+  it('renames and changes visibility of a created channel', () => {
+    const ch = Ch.createChannel('Ops', 'temp', 'private');
+    Ch.renameChannel(ch.id, 'renamed');
+    Ch.setChannelVisibility(ch.id, 'public');
+    const found = Ch.allChannels(config).find((c: any) => c.id === ch.id);
+    expect(found.name).toBe('renamed');
+    expect(found.visibility).toBe('public');
+  });
+
+  it('renames and deletes a created category (and its channels)', () => {
+    Ch.createCategory('Old');
+    Ch.createChannel('Old', 'c1', 'private');
+    Ch.renameCategory('Old', 'New');
+    expect(Ch.allCategories(config)).toContain('New');
+    expect(Ch.allChannels(config).some((c: any) => c.categoryName === 'New')).toBe(true);
+    Ch.deleteCategory('New');
+    expect(Ch.allCategories(config)).not.toContain('New');
+    expect(Ch.allChannels(config).some((c: any) => c.categoryName === 'New')).toBe(false);
+  });
+
+  it('built-in channels/categories are flagged non-editable', () => {
+    expect(Ch.isBuiltinChannel('general')).toBe(true);
+    expect(Ch.isBuiltinCategory('Ops')).toBe(true);
+    const ch = Ch.createChannel('Ops', 'made', 'private');
+    expect(Ch.isBuiltinChannel(ch.id)).toBe(false);
+  });
 });

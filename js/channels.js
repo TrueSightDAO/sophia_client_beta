@@ -123,6 +123,57 @@
     return getRetired().indexOf(id) !== -1;
   }
 
+  /** Find a created (user) channel by id. Built-in config channels are not editable. */
+  function findCreated(id) {
+    return getCreated().find((c) => c.id === id) || null;
+  }
+
+  function isBuiltinChannel(id) {
+    return !findCreated(id);
+  }
+
+  function renameChannel(id, newName) {
+    const list = getCreated();
+    const ch = list.find((c) => c.id === id);
+    if (!ch) return null;
+    ch.name = (newName || '').trim() || ch.name;
+    setCreated(list);
+    return ch;
+  }
+
+  function setChannelVisibility(id, visibility) {
+    const list = getCreated();
+    const ch = list.find((c) => c.id === id);
+    if (!ch) return null;
+    ch.visibility = visibility === 'public' ? 'public' : 'private';
+    setCreated(list);
+    return ch;
+  }
+
+  function isBuiltinCategory(name) {
+    return getCreatedCategories().indexOf(name) === -1;
+  }
+
+  function renameCategory(oldName, newName) {
+    const n = (newName || '').trim();
+    if (!n || n === oldName) return null;
+    const cats = getCreatedCategories();
+    const idx = cats.indexOf(oldName);
+    if (idx >= 0) {
+      cats[idx] = n;
+      setCreatedCategories(cats);
+    }
+    const list = getCreated();
+    list.forEach((c) => { if (c.categoryName === oldName) c.categoryName = n; });
+    setCreated(list);
+    return n;
+  }
+
+  function deleteCategory(name) {
+    setCreatedCategories(getCreatedCategories().filter((c) => c !== name));
+    setCreated(getCreated().filter((c) => c.categoryName !== name));
+  }
+
   window.SophiaChannels = {
     flattenChannels,
     allChannels,
@@ -133,6 +184,12 @@
     retireChannel,
     restoreChannel,
     isRetired,
+    renameChannel,
+    setChannelVisibility,
+    renameCategory,
+    deleteCategory,
+    isBuiltinChannel,
+    isBuiltinCategory,
     getCreated,
     getRetired,
     getCreatedCategories,

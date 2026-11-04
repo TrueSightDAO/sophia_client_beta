@@ -69,6 +69,7 @@
       const catHeader = document.createElement('div');
       catHeader.className = 'category';
       catHeader.textContent = catName;
+      catHeader.addEventListener('contextmenu', (e) => onCategoryContextMenu(e, catName));
       sidebar.appendChild(catHeader);
       (byCat[catName] || []).forEach((ch) => {
         sidebar.appendChild(buildChannelItem(ch));
@@ -88,6 +89,7 @@
     name.textContent = '# ' + ch.name;
     item.appendChild(name);
     item.addEventListener('click', () => selectChannel(ch.id));
+    item.addEventListener('contextmenu', (e) => onChannelContextMenu(e, ch));
 
     if (isPrivileged(currentRole)) {
       const retire = document.createElement('button');
@@ -103,6 +105,69 @@
       item.appendChild(retire);
     }
     return item;
+  }
+
+  function hideContextMenu() {
+    el('ctxMenu').hidden = true;
+  }
+
+  function showContextMenu(x, y, items) {
+    const menu = el('ctxMenu');
+    menu.innerHTML = '';
+    items.forEach((it) => {
+      const btn = document.createElement('button');
+      btn.className = 'ctx-item' + (it.danger ? ' danger' : '');
+      btn.textContent = it.label;
+      btn.addEventListener('click', () => { hideContextMenu(); it.action(); });
+      menu.appendChild(btn);
+    });
+    menu.hidden = false;
+    menu.style.left = x + 'px';
+    menu.style.top = y + 'px';
+    const rect = menu.getBoundingClientRect();
+    if (rect.right > window.innerWidth) menu.style.left = (window.innerWidth - rect.width - 8) + 'px';
+    if (rect.bottom > window.innerHeight) menu.style.top = (window.innerHeight - rect.height - 8) + 'px';
+  }
+
+  function onChannelContextMenu(e, ch) {
+    if (!isPrivileged(currentRole)) return;
+    e.preventDefault();
+    const items = [];
+    if (!window.SophiaChannels.isBuiltinChannel(ch.id)) {
+      items.push({ label: 'Rename…', action: () => {
+        const n = prompt('Rename channel', ch.name);
+        if (n && n.trim()) { window.SophiaChannels.renameChannel(ch.id, n.trim()); renderChannelList(); }
+      }});
+      items.push({ label: ch.visibility === 'public' ? 'Make private' : 'Make public', action: () => {
+        window.SophiaChannels.setChannelVisibility(ch.id, ch.visibility === 'public' ? 'private' : 'public');
+        renderChannelList();
+      }});
+    }
+    items.push({ label: 'Retire channel', danger: true, action: () => {
+      window.SophiaChannels.retireChannel(ch.id);
+      if (currentChannelId === ch.id) { currentChannelId = null; el('messages').innerHTML = ''; el('chatHeader').textContent = '# select a channel'; }
+      renderChannelList();
+    }});
+    showContextMenu(e.clientX, e.clientY, items);
+  }
+
+  function onCategoryContextMenu(e, catName) {
+    if (!isPrivileged(currentRole)) return;
+    if (window.SophiaChannels.isBuiltinCategory(catName)) return;
+    e.preventDefault();
+    showContextMenu(e.clientX, e.clientY, [
+      { label: 'Rename category…', action: () => {
+        const n = prompt('Rename category', catName);
+        if (n && n.trim()) { window.SophiaChannels.renameCategory(catName, n.trim()); renderChannelList(); }
+      }},
+      { label: 'Delete category', danger: true, action: () => {
+        if (confirm('Delete category "' + catName + '" and its channels?')) {
+          window.SophiaChannels.deleteCategory(catName);
+          if (currentChannelId && window.SophiaChannels.isRetired(currentChannelId)) { currentChannelId = null; el('messages').innerHTML = ''; el('chatHeader').textContent = '# select a channel'; }
+          renderChannelList();
+        }
+      }},
+    ]);
   }
 
   function openNewChannelModal() {
@@ -422,6 +487,11 @@
     el('newCategoryBtn').addEventListener('click', openCategoryModal);
     el('categoryCreateBtn').addEventListener('click', onCreateCategory);
     el('categoryCancelBtn').addEventListener('click', closeCategoryModal);
+    document.addEventListener('click', hideContextMenu);
+    document.addEventListener('contextmenu', (e) => {
+      if (!e.target.closest('.channel') && !e.target.closest('.category')) hideContextMenu();
+    });
+    document.addEventListener('keydown', (e) => { if (e.key === 'Escape') hideContextMenu(); });
     window.addEventListener('hashchange', () => {
       const wanted = channelFromHash();
       if (wanted && wanted !== currentChannelId && creds) {
