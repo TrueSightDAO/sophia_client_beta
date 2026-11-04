@@ -103,11 +103,49 @@
     return { registered: false, error: data.error || 'Unregistered' };
   }
 
+  /**
+   * Complete the email verification: submit [EMAIL VERIFICATION EVENT] with the
+   * verification key from the emailed link.
+   * @returns {Promise<{ok:boolean, error?:string}>}
+   */
+  async function verifyEmail(email, vk, publicKey, privateKey, source) {
+    const payload = buildEventPayload('EMAIL VERIFICATION EVENT', { Email: email, 'Verification Key': vk });
+    const txId = await window.SophiaCrypto.signString(privateKey, payload);
+    const shareText = buildShareText(payload, txId, publicKey, source);
+
+    const form = new FormData();
+    form.append('text', shareText);
+
+    let resp;
+    try {
+      resp = await fetch(EDGAR_BASE + '/dao/submit_contribution', { method: 'POST', body: form });
+    } catch (e) {
+      return { ok: false, error: 'Network error: ' + (e && e.message ? e.message : e) };
+    }
+    if (!resp.ok) {
+      let detail = 'HTTP ' + resp.status;
+      try { const j = await resp.json(); if (j && j.error) detail = j.error; } catch (e) { /* ignore */ }
+      return { ok: false, error: detail };
+    }
+    return { ok: true };
+  }
+
+  /** Read ?em=…&vk=… from the URL (the emailed verification link params). */
+  function verificationParams() {
+    try {
+      const p = new URLSearchParams(window.location.search);
+      const em = p.get('em');
+      const vk = p.get('vk');
+      if (em && vk) return { em, vk };
+    } catch (e) { /* ignore */ }
+    return null;
+  }
+
   function credentialUrl(publicKey) {
     // slug = pk-<sha256[:?]> — but the client does not compute the exact slug;
     // the credential page accepts the raw key too. Return the plain program page.
     return 'https://truesight.me/';
   }
 
-  window.SophiaIdentity = { registerEmail, checkRegistration, buildEventPayload, credentialUrl };
+  window.SophiaIdentity = { registerEmail, verifyEmail, checkRegistration, buildEventPayload, verificationParams, credentialUrl };
 })();

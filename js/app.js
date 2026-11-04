@@ -375,9 +375,34 @@
       setAuthBanner('Signed in as ' + auth.role + ' · identity ' + fingerprint(creds.publicKey), 'ok');
       selectChannelOrFirst();
       renderIdentityLink();
+      handleVerificationLink();
     } catch (e) {
       setAuthBanner('Identity failed: ' + e.message, 'error');
     }
+  }
+
+  async function handleVerificationLink() {
+    const vp = window.SophiaIdentity.verificationParams();
+    if (!vp || !creds) return;
+    const status = el('identityStatus');
+    status.hidden = false;
+    status.className = 'identity-status pending';
+    status.textContent = 'Completing email verification…';
+    const res = await window.SophiaIdentity.verifyEmail(vp.em, vp.vk, creds.publicKey, creds.privateKey);
+    history.replaceState(null, '', window.location.pathname + window.location.hash);
+    if (!res.ok) {
+      status.className = 'identity-status error';
+      status.textContent = 'Verification failed: ' + (res.error || 'unknown error');
+      return;
+    }
+    await renderIdentityLink();
+    // Refresh the role (verification may have promoted guest -> member/governor).
+    try {
+      const auth = await window.SophiaAuth.authenticate();
+      token = auth.token;
+      currentRole = auth.role;
+      renderChannelList();
+    } catch (e) { /* role refresh is best-effort */ }
   }
 
   async function renderIdentityLink() {
