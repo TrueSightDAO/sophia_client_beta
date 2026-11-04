@@ -100,6 +100,17 @@
     return bytesToBase64(sig);
   }
 
+  /** Sign an arbitrary UTF-8 string → base64 signature (Edgar event payloads). */
+  async function signString(privateKeyB64, str) {
+    const key = await importPrivateKey(privateKeyB64);
+    const sig = await getCrypto().subtle.sign(
+      'RSASSA-PKCS1-v1_5',
+      key,
+      new TextEncoder().encode(str)
+    );
+    return bytesToBase64(sig);
+  }
+
   /** Verify a signature over a payload (round-trip self-test helper). */
   async function verifySignature(publicKeyB64, payload, signatureB64) {
     const key = await importPublicKey(publicKeyB64);
@@ -122,6 +133,7 @@
     importPublicKey,
     canonicalPayloadJson,
     signPayload,
+    signString,
     verifySignature,
   };
 })();

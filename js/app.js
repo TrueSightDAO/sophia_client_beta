@@ -355,9 +355,75 @@
       el('composer').hidden = false;
       setAuthBanner('Signed in as ' + auth.role + ' · identity ' + fingerprint(creds.publicKey), 'ok');
       selectChannelOrFirst();
+      renderIdentityLink();
     } catch (e) {
       setAuthBanner('Identity failed: ' + e.message, 'error');
     }
+  }
+
+  async function renderIdentityLink() {
+    if (!creds || !creds.publicKey) return;
+    const linkBtn = el('linkIdentityBtn');
+    const status = el('identityStatus');
+    const cv = el('cvLink');
+    let res;
+    try {
+      res = await window.SophiaIdentity.checkRegistration(creds.publicKey);
+    } catch (e) {
+      return;
+    }
+    if (res.registered) {
+      linkBtn.hidden = true;
+      cv.hidden = false;
+      cv.href = 'https://truesight.me/';
+      status.hidden = false;
+      status.className = 'identity-status ok';
+      status.textContent = '✓ DAO identity: ' + (res.contributor_name || res.contributor_email || 'linked');
+    } else if (res.pending_verification) {
+      linkBtn.hidden = true;
+      cv.hidden = true;
+      status.hidden = false;
+      status.className = 'identity-status pending';
+      status.textContent = '⏳ Awaiting email verification (' + (res.contributor_email || 'your inbox') + ')';
+    } else {
+      linkBtn.hidden = false;
+      cv.hidden = true;
+      status.hidden = true;
+    }
+  }
+
+  function openIdentityModal() {
+    el('identityModal').hidden = false;
+    el('identityEmail').value = '';
+    el('identityEmail').focus();
+  }
+
+  function closeIdentityModal() {
+    el('identityModal').hidden = true;
+  }
+
+  async function onLinkIdentity() {
+    const email = el('identityEmail').value.trim();
+    if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+      el('identityEmail').focus();
+      return;
+    }
+    if (!creds) { closeIdentityModal(); return; }
+    const btn = el('identitySubmitBtn');
+    const status = el('identityStatus');
+    btn.disabled = true;
+    btn.textContent = 'Linking…';
+    const res = await window.SophiaIdentity.registerEmail(email, creds.publicKey, creds.privateKey);
+    btn.disabled = false;
+    btn.textContent = 'Link';
+    if (!res.ok) {
+      status.hidden = false;
+      status.className = 'identity-status error';
+      status.textContent = 'Error: ' + (res.error || 'registration failed');
+      return;
+    }
+    closeIdentityModal();
+    await renderIdentityLink();
   }
 
   function makeCallbacks(thinking, streamed) {
@@ -487,6 +553,9 @@
     el('newCategoryBtn').addEventListener('click', openCategoryModal);
     el('categoryCreateBtn').addEventListener('click', onCreateCategory);
     el('categoryCancelBtn').addEventListener('click', closeCategoryModal);
+    el('linkIdentityBtn').addEventListener('click', openIdentityModal);
+    el('identitySubmitBtn').addEventListener('click', onLinkIdentity);
+    el('identityCancelBtn').addEventListener('click', closeIdentityModal);
     document.addEventListener('click', hideContextMenu);
     document.addEventListener('contextmenu', (e) => {
       if (!e.target.closest('.channel') && !e.target.closest('.category')) hideContextMenu();
