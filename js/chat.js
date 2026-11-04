@@ -93,7 +93,7 @@
 
   /** Load conversation history for a channel (public-key keyed). */
   async function loadHistory(channelId, publicKey) {
-    const resp = await fetch(window.SophiaAuth.baseUrl() + '/session', {
+    const resp = await fetch(window.SophiaAuth.baseUrl() + '/session?limit=500', {
       headers: {
         'X-Public-Key': publicKey,
         'X-Session-Id': sessionIdFor(channelId),
