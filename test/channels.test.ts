@@ -1,0 +1,70 @@
+import { describe, it, expect, beforeEach } from 'vitest';
+import { readFileSync } from 'node:fs';
+import { fileURLToPath } from 'node:url';
+import { dirname, join } from 'node:path';
+
+const __dirname = dirname(fileURLToPath(import.meta.url));
+const ROOT = join(__dirname, '..');
+
+function loadScript(name: string) {
+  const src = readFileSync(join(ROOT, 'js', name), 'utf8');
+  const fn = new Function('window', src);
+  fn(window);
+}
+
+loadScript('channels.js');
+
+const Ch = (window as any).SophiaChannels;
+
+const config = {
+  categories: [
+    { id: 'ops', name: 'Ops', channels: [
+      { id: 'general', name: 'general', visibility: 'private' },
+    ] },
+    { id: 'public', name: 'Public', channels: [
+      { id: 'lobby', name: 'lobby', visibility: 'public' },
+    ] },
+  ],
+};
+
+beforeEach(() => {
+  localStorage.clear();
+});
+
+describe('channel management', () => {
+  it('starts with config channels only', () => {
+    expect(Ch.allChannels(config)).toHaveLength(2);
+  });
+
+  it('creates a channel in a new category', () => {
+    const ch = Ch.createChannel('Brazil', 'sunmint-signatures', 'private');
+    expect(ch.id).toMatch(/^ch_/);
+    expect(ch.categoryName).toBe('Brazil');
+    expect(ch.visibility).toBe('private');
+    const all = Ch.allChannels(config);
+    expect(all).toHaveLength(3);
+    const cats = new Set(all.map((c: any) => c.categoryName));
+    expect(cats.has('Brazil')).toBe(true);
+  });
+
+  it('retiring hides a built-in channel', () => {
+    Ch.retireChannel('general');
+    const all = Ch.allChannels(config);
+    expect(all.map((c: any) => c.id)).not.toContain('general');
+    expect(all).toHaveLength(1); // only lobby remains
+  });
+
+  it('restore brings a retired channel back', () => {
+    Ch.retireChannel('general');
+    Ch.restoreChannel('general');
+    expect(Ch.allChannels(config)).toHaveLength(2);
+  });
+
+  it('guest/member never see private channels (created or built-in)', () => {
+    Ch.createChannel('Ops', 'secret-ops', 'private');
+    const guest = Ch.visibleChannels(config, 'guest');
+    expect(guest.map((c: any) => c.id)).toEqual(['lobby']);
+    const gov = Ch.visibleChannels(config, 'governor');
+    expect(gov).toHaveLength(3);
+  });
+});

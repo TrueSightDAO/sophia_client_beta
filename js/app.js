@@ -1,6 +1,6 @@
 /**
  * app.js — bootstrap: load config, wire identity + channel list + chat pane,
- * attachments, and reactions.
+ * attachments, streaming replies, reactions, and channel management.
  */
 (function () {
   'use strict';
@@ -9,6 +9,7 @@
   let currentRole = 'guest';
   let creds = null; // { publicKey, privateKey }
   let pendingFiles = [];
+  let config = null;
 
   const REACTIONS = ['👍', '👀', '✅', '❌'];
 
@@ -25,17 +26,23 @@
     ));
   }
 
+  function isPrivileged(role) {
+    return role === 'governor' || role === 'sentinel';
+  }
+
   async function loadConfig() {
     const resp = await fetch('./config.json');
     if (!resp.ok) throw new Error('config.json not found (HTTP ' + resp.status + ')');
     return resp.json();
   }
 
-  function renderChannelList(config, role) {
+  // ---- channel list ----
+
+  function renderChannelList() {
     const sidebar = el('channelList');
     sidebar.innerHTML = '';
     const byCat = {};
-    window.SophiaChannels.visibleChannels(config, role).forEach((ch) => {
+    window.SophiaChannels.visibleChannels(config, currentRole).forEach((ch) => {
       (byCat[ch.categoryName] = byCat[ch.categoryName] || []).push(ch);
     });
     Object.keys(byCat).forEach((catName) => {
@@ -44,14 +51,59 @@
       catHeader.textContent = catName;
       sidebar.appendChild(catHeader);
       byCat[catName].forEach((ch) => {
-        const item = document.createElement('div');
-        item.className = 'channel';
-        item.dataset.channelId = ch.id;
-        item.textContent = '# ' + ch.name;
-        item.addEventListener('click', () => selectChannel(ch.id));
-        sidebar.appendChild(item);
+        sidebar.appendChild(buildChannelItem(ch));
       });
     });
+    el('newChannelBtn').hidden = !isPrivileged(currentRole);
+  }
+
+  function buildChannelItem(ch) {
+    const item = document.createElement('div');
+    item.className = 'channel';
+    item.dataset.channelId = ch.id;
+    const name = document.createElement('span');
+    name.className = 'channel-name';
+    name.textContent = '# ' + ch.name;
+    item.appendChild(name);
+    item.addEventListener('click', () => selectChannel(ch.id));
+
+    if (isPrivileged(currentRole)) {
+      const retire = document.createElement('button');
+      retire.className = 'channel-retire';
+      retire.textContent = '✕';
+      retire.title = 'Retire channel';
+      retire.addEventListener('click', (e) => {
+        e.stopPropagation();
+        window.SophiaChannels.retireChannel(ch.id);
+        if (currentChannelId === ch.id) { currentChannelId = null; el('messages').innerHTML = ''; el('chatHeader').textContent = '# select a channel'; }
+        renderChannelList();
+      });
+      item.appendChild(retire);
+    }
+    return item;
+  }
+
+  function openNewChannelModal() {
+    el('channelModal').hidden = false;
+    el('channelName').value = '';
+    el('channelCategory').value = '';
+    el('channelVisibility').value = 'private';
+    el('channelName').focus();
+  }
+
+  function closeNewChannelModal() {
+    el('channelModal').hidden = true;
+  }
+
+  function onCreateChannel() {
+    const name = el('channelName').value.trim();
+    const category = el('channelCategory').value.trim();
+    if (!name) { el('channelName').focus(); return; }
+    const visibility = el('channelVisibility').value;
+    const ch = window.SophiaChannels.createChannel(category, name, visibility);
+    closeNewChannelModal();
+    renderChannelList();
+    selectChannel(ch.id);
   }
 
   async function selectChannel(channelId) {
@@ -82,28 +134,29 @@
     });
   }
 
-  /** Render message text, converting known image/file URLs into inline previews. */
+  /** Render message text, inlining image/file URLs. */
   function renderContent(text) {
-    const safe = escapeHtml(text);
-    const attachments = window.SophiaChat.detectAttachments(text, window.AppConfig.sophiaBaseUrl);
-    if (!attachments.length) return safe;
+    const base = (config.sophiaBaseUrl || '').replace(/\/+$/, '');
+    const IMG = /\.(png|jpe?g|gif|webp|svg)(\?[^\s)]*)?$/i;
 
-    // Replace each detected URL's escaped form with an <img>/link. EscapeHtml turns
-    // "/uploads/x.png" into "/uploads/x.png" (no change) and "http://" stays safe;
-    // we swap the plain URL back in carefully via a placeholder approach.
-    let html = safe;
-    attachments.forEach((att) => {
-      const escapedUrl = escapeHtml(att.url);
-      const tag = att.type === 'image'
-        ? '<img class="attach" src="' + escapedUrl + '" alt="attachment" loading="lazy" />'
-        : '<a class="attach-link" href="' + escapedUrl + '" target="_blank" rel="noopener">' + escapedUrl + '</a>';
-      // Replace the first occurrence of the escaped URL (or its /uploads/ original)
-      html = html.replace(escapedUrl, tag);
-      if (att.url.startsWith((window.AppConfig.sophiaBaseUrl || '').replace(/\/+$/, ''))) {
-        const rel = att.url.replace((window.AppConfig.sophiaBaseUrl || '').replace(/\/+$/, ''), '');
-        html = html.replace(escapeHtml(rel), tag);
-      }
+    let html = escapeHtml(text);
+
+    // Markdown image: ![alt](url)
+    html = html.replace(/!\[([^\]]*)\]\((https?:\/\/[^\s)]+|\/uploads\/[^\s)]+)\)/g, (m, alt, url) => {
+      const full = url.charAt(0) === '/' ? base + url : url;
+      return '<img class="attach" src="' + full + '" alt="' + escapeHtml(alt) + '" loading="lazy" />';
     });
+
+    // Bare /uploads/ paths (image or file)
+    html = html.replace(/(^|[\s(])(\/uploads\/[A-Za-z0-9._-]+)/g, (m, pre, p) => {
+      const full = base + p;
+      if (IMG.test(p)) return pre + '<img class="attach" src="' + full + '" loading="lazy" />';
+      return pre + '<a class="attach-link" href="' + full + '" target="_blank" rel="noopener">' + full + '</a>';
+    });
+
+    // Bare http(s) image URLs
+    html = html.replace(/(https?:\/\/[^\s<>"']+\.(?:png|jpe?g|gif|webp|svg)(?:\?[^\s<>"']*)?)/gi, '<img class="attach" src="$1" loading="lazy" />');
+
     return html;
   }
 
@@ -133,7 +186,6 @@
   // ---- reactions (client-side, persisted in localStorage per channel) ----
 
   function reactionKey(text) {
-    // Stable-ish key from the message content, so reactions survive a reload.
     let h = 0;
     for (let i = 0; i < text.length; i++) h = (h * 31 + text.charCodeAt(i)) | 0;
     return (h >>> 0).toString(36);
@@ -153,7 +205,7 @@
       const all = raw ? JSON.parse(raw) : {};
       all[key] = map;
       localStorage.setItem('sophia_reactions_' + channelId, JSON.stringify(all));
-    } catch (e) { /* quota — non-fatal */ }
+    } catch (e) { /* non-fatal */ }
   }
 
   function buildReactionBar(text) {
@@ -187,17 +239,53 @@
     try {
       creds = await window.SophiaAuth.ensureKeypair();
       currentRole = 'governor'; // v1: only governor keys pass verify_payload on /chat
-      const cfg = window.AppConfig;
-      renderChannelList(cfg, currentRole);
+      renderChannelList();
       el('identity').textContent = 'identity: ' + fingerprint(creds.publicKey);
       el('connectBtn').hidden = true;
       el('composer').hidden = false;
       setAuthBanner('Signed in as governor · identity ' + fingerprint(creds.publicKey), 'ok');
-      const first = window.SophiaChannels.visibleChannels(cfg, currentRole)[0];
+      const first = window.SophiaChannels.visibleChannels(config, currentRole)[0];
       if (first) selectChannel(first.id);
     } catch (e) {
       setAuthBanner('Identity failed: ' + e.message, 'error');
     }
+  }
+
+  function makeCallbacks(thinking, streamed) {
+    return {
+      onEvent(evt) {
+        switch (evt.type) {
+          case 'token': {
+            const t = evt.content || '';
+            if (t && t !== 'Thinking…' && t !== 'Thinking...') {
+              streamed.value += t;
+              thinking.textContent = streamed.value;
+            }
+            break;
+          }
+          case 'tool':
+            thinking.textContent = '🔧 ' + (evt.tool || 'tool') + (evt.status === 'calling' ? ' …' : ' done');
+            break;
+          case 'status':
+            thinking.textContent = '🔄 ' + (evt.message || evt.stage || 'processing…');
+            break;
+          case 'error':
+            thinking.textContent = '⚠️ ' + (evt.content || evt.message || 'error');
+            break;
+          case 'cancelled':
+            thinking.textContent = (streamed.value || '') + (evt.reason ? ' (cancelled)' : '');
+            break;
+          case 'done':
+            if (evt.response != null) thinking.innerHTML = renderContent(evt.response);
+            break;
+        }
+        el('messages').scrollTop = el('messages').scrollHeight;
+      },
+      onDone(t) {
+        if (t) thinking.innerHTML = renderContent(t);
+        else if (!streamed.value) thinking.textContent = '(no reply)';
+      },
+    };
   }
 
   async function onSend() {
@@ -215,23 +303,10 @@
     if (files.length) appendMessage('you', '📎 ' + files.map((f) => f.name).join(', '));
 
     const thinking = appendMessage('sophia', '🔄 Thinking…', { reactive: false });
+    const streamed = { value: '' };
+    const cb = makeCallbacks(thinking, streamed);
 
     try {
-      const cb = {
-        onEvent(evt) {
-          if (evt.type === 'done' && evt.response != null) {
-            thinking.innerHTML = renderContent(evt.response);
-          } else if (evt.type === 'status') {
-            thinking.textContent = '🔄 ' + ((evt.message) || 'processing…');
-          }
-        },
-        onDone(t) {
-          if (!t) thinking.textContent = '(no reply)';
-          if (thinking.textContent && thinking.textContent.indexOf('🔄') === 0 && t) {
-            thinking.innerHTML = renderContent(t);
-          }
-        },
-      };
       if (files.length) {
         await window.SophiaChat.sendMessageWithFiles(currentChannelId, text, files, creds, cb);
       } else {
@@ -248,7 +323,7 @@
   }
 
   function updateAttachLabel() {
-    el('attachLabel').textContent = pendingFiles.length ? '📎 ' + pendingFiles.length : '📎';
+    el('attachBtn').textContent = pendingFiles.length ? '📎 ' + pendingFiles.length : '📎';
   }
 
   function onFilesChosen() {
@@ -260,14 +335,15 @@
 
   async function boot() {
     try {
-      window.AppConfig = await loadConfig();
-      document.title = window.AppConfig.appTitle || 'TrueSight Ops Console';
-      el('appTitle').textContent = window.AppConfig.appTitle || 'TrueSight Ops Console';
-      el('deployment').textContent = 'deployment: ' + (window.AppConfig.deployment || 'local') +
-        ' → ' + (window.AppConfig.sophiaBaseUrl || '');
+      config = await loadConfig();
+      window.AppConfig = config;
+      document.title = config.appTitle || 'TrueSight Ops Console';
+      el('appTitle').textContent = config.appTitle || 'TrueSight Ops Console';
+      el('deployment').textContent = 'deployment: ' + (config.deployment || 'local') +
+        ' → ' + (config.sophiaBaseUrl || '');
       const pub = window.SophiaAuth.getStoredPublicKey();
       el('identity').textContent = 'identity: ' + (pub ? fingerprint(pub) : '(none)');
-      renderChannelList(window.AppConfig, currentRole);
+      renderChannelList();
       if (pub) onConnect(); // already have a key → connect immediately
     } catch (e) {
       setAuthBanner('Boot error: ' + e.message, 'error');
@@ -282,6 +358,9 @@
     el('messageInput').addEventListener('keydown', (e) => {
       if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); onSend(); }
     });
+    el('newChannelBtn').addEventListener('click', openNewChannelModal);
+    el('channelCreateBtn').addEventListener('click', onCreateChannel);
+    el('channelCancelBtn').addEventListener('click', closeNewChannelModal);
     boot();
   });
 })();

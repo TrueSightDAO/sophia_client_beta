@@ -70,9 +70,78 @@ html, body {
   border-radius: 4px;
   cursor: pointer;
   color: var(--muted);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
 }
 .channel:hover { background: #35373c; color: var(--text); }
 .channel.active { background: #404249; color: #fff; }
+.channel-name { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.channel-retire {
+  display: none;
+  background: transparent;
+  border: none;
+  color: var(--muted);
+  cursor: pointer;
+  font-size: 12px;
+  padding: 0 4px;
+}
+.channel:hover .channel-retire { display: inline-block; }
+.channel-retire:hover { color: var(--err); }
+
+.new-channel {
+  background: transparent;
+  border: 1px dashed #3f4147;
+  color: var(--muted);
+  border-radius: 4px;
+  padding: 6px;
+  margin-top: 6px;
+  cursor: pointer;
+  font-size: 13px;
+}
+.new-channel:hover { color: var(--text); border-color: var(--accent); }
+
+.modal {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 10;
+}
+.modal[hidden] { display: none; }
+.modal-card {
+  background: var(--panel);
+  border: 1px solid #26272b;
+  border-radius: 8px;
+  padding: 20px;
+  width: 320px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.modal-card h3 { margin: 0; }
+.modal-card label { display: flex; flex-direction: column; gap: 4px; font-size: 13px; color: var(--muted); }
+.modal-card input, .modal-card select {
+  background: #383a40;
+  color: var(--text);
+  border: 1px solid #3f4147;
+  border-radius: 5px;
+  padding: 8px;
+  font-family: inherit;
+  font-size: 14px;
+}
+.modal-actions { display: flex; justify-content: flex-end; gap: 8px; }
+.modal-actions button {
+  background: transparent;
+  color: var(--text);
+  border: 1px solid #3f4147;
+  border-radius: 5px;
+  padding: 8px 14px;
+  cursor: pointer;
+}
+.modal-actions button.send { background: var(--accent); border-color: var(--accent); color: #fff; }
 
 .chat { display: flex; flex-direction: column; background: var(--panel); }
 .chat-header {

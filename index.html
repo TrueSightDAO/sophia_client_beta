@@ -18,6 +18,7 @@
       <div class="auth-banner" id="authBanner" hidden></div>
       <button id="connectBtn" class="connect">Connect identity</button>
       <div id="channelList" class="channel-list"></div>
+      <button id="newChannelBtn" class="new-channel" hidden>+ New channel</button>
       <div id="identity" class="identity"></div>
     </aside>
 
@@ -31,6 +32,24 @@
         <input type="file" id="fileInput" multiple hidden />
       </div>
     </main>
+  </div>
+
+  <div id="channelModal" class="modal" hidden>
+    <div class="modal-card">
+      <h3>New channel</h3>
+      <label>Name <input id="channelName" placeholder="e.g. sunmint-signatures" /></label>
+      <label>Category <input id="channelCategory" placeholder="e.g. Ops (blank = General)" /></label>
+      <label>Visibility
+        <select id="channelVisibility">
+          <option value="private">private (governor/sentinel only)</option>
+          <option value="public">public (everyone)</option>
+        </select>
+      </label>
+      <div class="modal-actions">
+        <button id="channelCancelBtn">Cancel</button>
+        <button id="channelCreateBtn" class="send">Create</button>
+      </div>
+    </div>
   </div>
 
   <script src="js/crypto.js"></script>
