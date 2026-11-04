@@ -240,6 +240,9 @@ html, body {
   padding: 10px;
   font-family: inherit;
   font-size: 15px;
+  line-height: 1.35;
+  max-height: 220px;
+  overflow-y: auto;
 }
 .composer textarea:focus { outline: 1px solid var(--accent); }
 .composer .send {

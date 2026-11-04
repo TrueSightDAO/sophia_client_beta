@@ -339,10 +339,9 @@
     if ((!text && !pendingFiles.length) || !currentChannelId) return;
     if (!token || !creds) { setAuthBanner('Not connected — connect first.', 'error'); return; }
 
-    input.value = '';
     const files = pendingFiles.slice();
     pendingFiles = [];
-    updateAttachLabel();
+    resetComposer();
 
     if (text) appendMessage('you', text);
     if (files.length) appendMessage('you', '📎 ' + files.map((f) => f.name).join(', '));
@@ -369,6 +368,19 @@
 
   function updateAttachLabel() {
     el('attachBtn').textContent = pendingFiles.length ? '📎 ' + pendingFiles.length : '📎';
+  }
+
+  function autoResizeTextarea() {
+    const t = el('messageInput');
+    t.style.height = 'auto';
+    t.style.height = Math.min(t.scrollHeight, 220) + 'px';
+  }
+
+  function resetComposer() {
+    const t = el('messageInput');
+    t.value = '';
+    t.style.height = 'auto';
+    updateAttachLabel();
   }
 
   function onFilesChosen() {
@@ -401,8 +413,9 @@
     el('attachBtn').addEventListener('click', () => el('fileInput').click());
     el('fileInput').addEventListener('change', onFilesChosen);
     el('messageInput').addEventListener('keydown', (e) => {
-      if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); onSend(); }
+      if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) { e.preventDefault(); onSend(); }
     });
+    el('messageInput').addEventListener('input', autoResizeTextarea);
     el('newChannelBtn').addEventListener('click', openNewChannelModal);
     el('channelCreateBtn').addEventListener('click', onCreateChannel);
     el('channelCancelBtn').addEventListener('click', closeNewChannelModal);
