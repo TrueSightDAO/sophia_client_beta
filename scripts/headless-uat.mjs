@@ -63,7 +63,7 @@ check('same channel reactivated on reload', (await page.locator('.channel.active
 await page.click('#newCategoryBtn');
 await page.fill('#categoryName', 'UAT');
 await page.click('#categoryCreateBtn');
-await page.waitForTimeout(300);
+await page.waitForTimeout(2000);
 check('category appears in sidebar', (await page.locator('.category', { hasText: 'UAT' }).count()) === 1);
 
 // 4. create a channel under that category (dropdown)
@@ -72,14 +72,14 @@ check('category dropdown populated', (await page.locator('#channelCategory optio
 await page.fill('#channelName', 'uat-test-channel');
 await page.selectOption('#channelCategory', 'UAT');
 await page.click('#channelCreateBtn');
-await page.waitForTimeout(300);
+await page.waitForTimeout(2000);
 check('created channel appears', (await page.locator('.channel', { hasText: 'uat-test-channel' }).count()) === 1);
 
 // 5. retire the channel
 const created = page.locator('.channel', { hasText: 'uat-test-channel' });
 await created.hover();
 await created.locator('.channel-retire').click();
-await page.waitForTimeout(300);
+await page.waitForTimeout(2000);
 check('retired channel removed', (await page.locator('.channel', { hasText: 'uat-test-channel' }).count()) === 0);
 
 // 6. send a message and confirm a reply (sentinel has full rights)

@@ -42,11 +42,11 @@ Registry shape (Redis key `truesight:channels:registry`, JSON):
 ## Resume tracker
 
 ```
-RESUME HERE → PR1 (brain registry + endpoints + deploy)
+RESUME HERE → PR4 (cross-origin sync verify + UAT + promote)
 PR0  roadmap ................... ☑ checked in
-PR1  brain registry + endpoints  ☐
-PR2  channels.js server-backed .. ☐
-PR3  app.js wiring .............. ☐
+PR1  brain registry + endpoints  ☑ done (Redis, deployed)
+PR2  channels.js server-backed .. ☑ done
+PR3  app.js wiring .............. ☑ done
 PR4  sync verify + UAT + promote  ☐ gate: UAT
 ```
 

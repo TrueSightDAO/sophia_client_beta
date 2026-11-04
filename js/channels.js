@@ -1,13 +1,15 @@
 /**
- * channels.js — the config-driven category/channel model + governor management,
- * with a localStorage overlay.
+ * channels.js — config-driven channel/category model + a shared server registry.
  *
- * Channel/category authority (locked with Gary): public channels viewable by guest;
- * private channels require governor/sentinel; channel + category creation/retirement
- * is governor/sentinel-only. Built-in channels come from `config.json` (per-deployment);
- * a governor/sentinel may create additional channels and categories, and retire
- * (hide) any channel. The overlay is stored in localStorage, so it is per-browser —
- * a server-side channel registry is a later PR.
+ * Built-in channels come from `config.json` (per-deployment). User-created
+ * channels/categories and retired ids live in a Redis-backed registry on the
+ * brain (`GET/POST/PUT/DELETE /channels`, `POST/PUT/DELETE /categories`), so the
+ * same set appears across origins/devices. localStorage is read only as a
+ * fallback when the registry endpoint is unreachable.
+ *
+ * Channel/category authority (locked with Gary): public channels viewable by
+ * guest; private channels require governor/sentinel; channel + category
+ * creation/retirement is governor/sentinel-only (enforced server-side too).
  */
 (function () {
   'use strict';
@@ -15,6 +17,18 @@
   const LS_CREATED = 'sophia_channels_created';
   const LS_RETIRED = 'sophia_channels_retired';
   const LS_CATEGORIES = 'sophia_categories_created';
+
+  // In-memory cache of the shared registry (loaded from the server).
+  let registry = { channels: [], categories: [], retired: [] };
+
+  function baseUrl() {
+    const cfg = window.AppConfig || {};
+    return (cfg.sophiaBaseUrl || 'https://sophia.truesight.me').replace(/\/+$/, '');
+  }
+
+  function _lsGet(key) {
+    try { return JSON.parse(localStorage.getItem(key) || '[]'); } catch (e) { return []; }
+  }
 
   function flattenChannels(config) {
     const out = [];
@@ -33,148 +47,130 @@
     return out;
   }
 
-  function getCreated() {
-    try { return JSON.parse(localStorage.getItem(LS_CREATED) || '[]'); } catch (e) { return []; }
-  }
-  function setCreated(list) {
-    try { localStorage.setItem(LS_CREATED, JSON.stringify(list)); } catch (e) { /* quota */ }
-  }
-  function getRetired() {
-    try { return JSON.parse(localStorage.getItem(LS_RETIRED) || '[]'); } catch (e) { return []; }
-  }
-  function setRetired(list) {
-    try { localStorage.setItem(LS_RETIRED, JSON.stringify(list)); } catch (e) { /* quota */ }
-  }
-  function getCreatedCategories() {
-    try { return JSON.parse(localStorage.getItem(LS_CATEGORIES) || '[]'); } catch (e) { return []; }
-  }
-  function setCreatedCategories(list) {
-    try { localStorage.setItem(LS_CATEGORIES, JSON.stringify(list)); } catch (e) { /* quota */ }
+  /** Load the shared registry from the brain. Falls back to localStorage. */
+  async function loadRegistry(token) {
+    try {
+      const resp = await fetch(baseUrl() + '/channels', {
+        headers: { Authorization: 'Bearer ' + token },
+      });
+      if (resp.ok) {
+        const d = await resp.json();
+        registry = {
+          channels: (d.channels || []).map((c) => Object.assign({}, c, { created: true })),
+          categories: d.categories || [],
+          retired: d.retired || [],
+        };
+        return registry;
+      }
+    } catch (e) { /* fall back to localStorage */ }
+    registry = {
+      channels: _lsGet(LS_CREATED).map((c) => Object.assign({}, c, { created: true })),
+      categories: _lsGet(LS_CATEGORIES),
+      retired: _lsGet(LS_RETIRED),
+    };
+    return registry;
   }
 
-  /** All categories = config category names + created (deduped, order-preserving). */
   function allCategories(config) {
     const built = (config.categories || []).map((c) => c.name);
-    const created = getCreatedCategories().filter((n) => built.indexOf(n) === -1);
+    const created = registry.categories.filter((n) => built.indexOf(n) === -1);
     return built.concat(created);
   }
 
-  /** Create a category (idempotent by name). Returns the normalized name, or null if empty. */
-  function createCategory(name) {
-    const n = (name || '').trim();
-    if (!n) return null;
-    const list = getCreatedCategories();
-    if (list.indexOf(n) === -1) {
-      list.push(n);
-      setCreatedCategories(list);
-    }
-    return n;
-  }
-
-  /** All channels = config (minus retired) + created (minus retired). */
   function allChannels(config) {
-    const retired = new Set(getRetired());
+    const retired = new Set(registry.retired);
     const built = flattenChannels(config).filter((c) => !retired.has(c.id));
-    const created = getCreated().filter((c) => !retired.has(c.id));
+    const created = registry.channels.filter((c) => !retired.has(c.id));
     return built.concat(created);
   }
 
-  /**
-   * @param {string} role — 'governor' | 'sentinel' | 'member' | 'guest'
-   * @returns channels visible to that role.
-   */
   function visibleChannels(config, role) {
     const all = allChannels(config);
     if (role === 'governor' || role === 'sentinel') return all;
     return all.filter((ch) => ch.visibility !== 'private');
   }
 
-  /** Create a channel under an existing category (name from the dropdown). */
-  function createChannel(categoryName, name, visibility) {
-    const id = 'ch_' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
-    const ch = {
-      id,
-      categoryId: null,
-      categoryName: (categoryName || 'General').trim() || 'General',
-      name: (name || '').trim() || id,
-      visibility: visibility === 'public' ? 'public' : 'private',
-      created: true,
-    };
-    const list = getCreated();
-    list.push(ch);
-    setCreated(list);
-    return ch;
-  }
-
-  /** Retire (hide) a channel. */
-  function retireChannel(id) {
-    const retired = getRetired();
-    if (retired.indexOf(id) === -1) {
-      retired.push(id);
-      setRetired(retired);
-    }
-  }
-
-  function restoreChannel(id) {
-    setRetired(getRetired().filter((r) => r !== id));
-  }
-
   function isRetired(id) {
-    return getRetired().indexOf(id) !== -1;
-  }
-
-  /** Find a created (user) channel by id. Built-in config channels are not editable. */
-  function findCreated(id) {
-    return getCreated().find((c) => c.id === id) || null;
+    return registry.retired.indexOf(id) !== -1;
   }
 
   function isBuiltinChannel(id) {
-    return !findCreated(id);
-  }
-
-  function renameChannel(id, newName) {
-    const list = getCreated();
-    const ch = list.find((c) => c.id === id);
-    if (!ch) return null;
-    ch.name = (newName || '').trim() || ch.name;
-    setCreated(list);
-    return ch;
-  }
-
-  function setChannelVisibility(id, visibility) {
-    const list = getCreated();
-    const ch = list.find((c) => c.id === id);
-    if (!ch) return null;
-    ch.visibility = visibility === 'public' ? 'public' : 'private';
-    setCreated(list);
-    return ch;
+    return !registry.channels.some((c) => c.id === id);
   }
 
   function isBuiltinCategory(name) {
-    return getCreatedCategories().indexOf(name) === -1;
+    return registry.categories.indexOf(name) === -1;
   }
 
-  function renameCategory(oldName, newName) {
-    const n = (newName || '').trim();
-    if (!n || n === oldName) return null;
-    const cats = getCreatedCategories();
-    const idx = cats.indexOf(oldName);
-    if (idx >= 0) {
-      cats[idx] = n;
-      setCreatedCategories(cats);
+  // ---- server CRUD (async; updates the in-memory cache on success) ----
+
+  async function _req(method, path, body, token) {
+    const resp = await fetch(baseUrl() + path, {
+      method,
+      headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + (token || '') },
+      body: body ? JSON.stringify(body) : undefined,
+    });
+    if (!resp.ok) {
+      let detail = 'HTTP ' + resp.status;
+      try {
+        const j = await resp.json();
+        if (j && (j.detail || j.error)) detail = j.detail || j.error;
+      } catch (e) { /* ignore */ }
+      throw new Error(detail);
     }
-    const list = getCreated();
-    list.forEach((c) => { if (c.categoryName === oldName) c.categoryName = n; });
-    setCreated(list);
+    return resp.json();
+  }
+
+  async function createChannel(categoryName, name, visibility, token) {
+    const ch = await _req('POST', '/channels', { category_name: categoryName, name, visibility }, token);
+    ch.created = true;
+    registry.channels.push(ch);
+    return ch;
+  }
+
+  async function renameChannel(id, newName, token) {
+    const ch = await _req('PUT', '/channels/' + encodeURIComponent(id), { name: newName }, token);
+    const local = registry.channels.find((c) => c.id === id);
+    if (local) local.name = ch.name;
+    return ch;
+  }
+
+  async function setChannelVisibility(id, visibility, token) {
+    const ch = await _req('PUT', '/channels/' + encodeURIComponent(id), { visibility }, token);
+    const local = registry.channels.find((c) => c.id === id);
+    if (local) local.visibility = ch.visibility;
+    return ch;
+  }
+
+  async function retireChannel(id, token) {
+    await _req('DELETE', '/channels/' + encodeURIComponent(id), null, token);
+    if (registry.retired.indexOf(id) === -1) registry.retired.push(id);
+    registry.channels = registry.channels.filter((c) => c.id !== id);
+  }
+
+  async function createCategory(name, token) {
+    const res = await _req('POST', '/categories', { name }, token);
+    const n = res.name || (name || '').trim();
+    if (n && registry.categories.indexOf(n) === -1) registry.categories.push(n);
     return n;
   }
 
-  function deleteCategory(name) {
-    setCreatedCategories(getCreatedCategories().filter((c) => c !== name));
-    setCreated(getCreated().filter((c) => c.categoryName !== name));
+  async function renameCategory(oldName, newName, token) {
+    const res = await _req('PUT', '/categories/' + encodeURIComponent(oldName), { name: newName }, token);
+    const n = res.name || oldName;
+    registry.categories = registry.categories.map((c) => (c === oldName ? n : c));
+    registry.channels.forEach((c) => { if (c.categoryName === oldName) c.categoryName = n; });
+    return n;
+  }
+
+  async function deleteCategory(name, token) {
+    await _req('DELETE', '/categories/' + encodeURIComponent(name), null, token);
+    registry.categories = registry.categories.filter((c) => c !== name);
+    registry.channels = registry.channels.filter((c) => c.categoryName !== name);
   }
 
   window.SophiaChannels = {
+    loadRegistry,
     flattenChannels,
     allChannels,
     allCategories,
@@ -182,16 +178,12 @@
     createChannel,
     createCategory,
     retireChannel,
-    restoreChannel,
-    isRetired,
     renameChannel,
     setChannelVisibility,
     renameCategory,
     deleteCategory,
     isBuiltinChannel,
     isBuiltinCategory,
-    getCreated,
-    getRetired,
-    getCreatedCategories,
+    isRetired,
   };
 })();

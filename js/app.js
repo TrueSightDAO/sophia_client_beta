@@ -115,9 +115,9 @@
       retire.className = 'channel-retire';
       retire.textContent = '✕';
       retire.title = 'Retire channel';
-      retire.addEventListener('click', (e) => {
+      retire.addEventListener('click', async (e) => {
         e.stopPropagation();
-        window.SophiaChannels.retireChannel(ch.id);
+        try { await window.SophiaChannels.retireChannel(ch.id, token); } catch (err) { setAuthBanner('Retire failed: ' + (err.message || err), 'error'); }
         if (currentChannelId === ch.id) { currentChannelId = null; el('messages').innerHTML = ''; el('chatHeader').textContent = '# select a channel'; }
         renderChannelList();
       });
@@ -153,17 +153,20 @@
     e.preventDefault();
     const items = [];
     if (!window.SophiaChannels.isBuiltinChannel(ch.id)) {
-      items.push({ label: 'Rename…', action: () => {
+      items.push({ label: 'Rename…', action: async () => {
         const n = prompt('Rename channel', ch.name);
-        if (n && n.trim()) { window.SophiaChannels.renameChannel(ch.id, n.trim()); renderChannelList(); }
+        if (n && n.trim()) {
+          try { await window.SophiaChannels.renameChannel(ch.id, n.trim(), token); } catch (err) { setAuthBanner('Rename failed: ' + (err.message || err), 'error'); }
+          renderChannelList();
+        }
       }});
-      items.push({ label: ch.visibility === 'public' ? 'Make private' : 'Make public', action: () => {
-        window.SophiaChannels.setChannelVisibility(ch.id, ch.visibility === 'public' ? 'private' : 'public');
+      items.push({ label: ch.visibility === 'public' ? 'Make private' : 'Make public', action: async () => {
+        try { await window.SophiaChannels.setChannelVisibility(ch.id, ch.visibility === 'public' ? 'private' : 'public', token); } catch (err) { setAuthBanner('Update failed: ' + (err.message || err), 'error'); }
         renderChannelList();
       }});
     }
-    items.push({ label: 'Retire channel', danger: true, action: () => {
-      window.SophiaChannels.retireChannel(ch.id);
+    items.push({ label: 'Retire channel', danger: true, action: async () => {
+      try { await window.SophiaChannels.retireChannel(ch.id, token); } catch (err) { setAuthBanner('Retire failed: ' + (err.message || err), 'error'); }
       if (currentChannelId === ch.id) { currentChannelId = null; el('messages').innerHTML = ''; el('chatHeader').textContent = '# select a channel'; }
       renderChannelList();
     }});
@@ -175,13 +178,16 @@
     if (window.SophiaChannels.isBuiltinCategory(catName)) return;
     e.preventDefault();
     showContextMenu(e.clientX, e.clientY, [
-      { label: 'Rename category…', action: () => {
+      { label: 'Rename category…', action: async () => {
         const n = prompt('Rename category', catName);
-        if (n && n.trim()) { window.SophiaChannels.renameCategory(catName, n.trim()); renderChannelList(); }
+        if (n && n.trim()) {
+          try { await window.SophiaChannels.renameCategory(catName, n.trim(), token); } catch (err) { setAuthBanner('Rename failed: ' + (err.message || err), 'error'); }
+          renderChannelList();
+        }
       }},
-      { label: 'Delete category', danger: true, action: () => {
+      { label: 'Delete category', danger: true, action: async () => {
         if (confirm('Delete category "' + catName + '" and its channels?')) {
-          window.SophiaChannels.deleteCategory(catName);
+          try { await window.SophiaChannels.deleteCategory(catName, token); } catch (err) { setAuthBanner('Delete failed: ' + (err.message || err), 'error'); }
           if (currentChannelId && window.SophiaChannels.isRetired(currentChannelId)) { currentChannelId = null; el('messages').innerHTML = ''; el('chatHeader').textContent = '# select a channel'; }
           renderChannelList();
         }
@@ -208,12 +214,18 @@
     el('channelModal').hidden = true;
   }
 
-  function onCreateChannel() {
+  async function onCreateChannel() {
     const name = el('channelName').value.trim();
     const category = el('channelCategory').value;
     if (!name) { el('channelName').focus(); return; }
     const visibility = el('channelVisibility').value;
-    const ch = window.SophiaChannels.createChannel(category, name, visibility);
+    let ch;
+    try {
+      ch = await window.SophiaChannels.createChannel(category, name, visibility, token);
+    } catch (e) {
+      setAuthBanner('Create channel failed: ' + (e && e.message ? e.message : e), 'error');
+      return;
+    }
     closeNewChannelModal();
     renderChannelList();
     selectChannel(ch.id);
@@ -229,10 +241,15 @@
     el('categoryModal').hidden = true;
   }
 
-  function onCreateCategory() {
+  async function onCreateCategory() {
     const name = el('categoryName').value.trim();
     if (!name) { el('categoryName').focus(); return; }
-    window.SophiaChannels.createCategory(name);
+    try {
+      await window.SophiaChannels.createCategory(name, token);
+    } catch (e) {
+      setAuthBanner('Create category failed: ' + (e && e.message ? e.message : e), 'error');
+      return;
+    }
     closeCategoryModal();
     renderChannelList();
   }
@@ -368,6 +385,7 @@
       token = auth.token;
       creds = await window.SophiaAuth.ensureKeypair();
       currentRole = auth.role;
+      await window.SophiaChannels.loadRegistry(token);
       renderChannelList();
       el('identity').textContent = 'identity: ' + fingerprint(creds.publicKey);
       el('connectBtn').hidden = true;
