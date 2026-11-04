@@ -27,17 +27,18 @@
 
     function inline(s) {
       let h = escapeHtml(s);
+      const copyBtn = '<button class="url-copy" title="Copy link" aria-label="Copy link">⧉</button>';
       // inline code (before bold/italic so `**` inside code stays literal)
       h = h.replace(/`([^`]+)`/g, '<code>$1</code>');
-      // links [text](url)
-      h = h.replace(/\[([^\]]+)\]\((https?:\/\/[^\s)]+|\/[^\s)]+)\)/g, (m, txt, url) => {
-        const full = url.charAt(0) === '/' ? base + url : url;
-        return '<a href="' + full + '" target="_blank" rel="noopener">' + txt + '</a>';
-      });
       // markdown image ![alt](url)
       h = h.replace(/!\[([^\]]*)\]\((https?:\/\/[^\s)]+|\/uploads\/[^\s)]+)\)/g, (m, alt, url) => {
         const full = url.charAt(0) === '/' ? base + url : url;
-        return '<img class="attach" src="' + full + '" alt="' + escapeHtml(alt) + '" loading="lazy" />';
+        return '<span class="attach-fig"><img class="attach" src="' + full + '" alt="' + escapeHtml(alt) + '" loading="lazy" />' + copyBtn + '</span>';
+      });
+      // links [text](url)
+      h = h.replace(/\[([^\]]+)\]\((https?:\/\/[^\s)]+|\/[^\s)]+)\)/g, (m, txt, url) => {
+        const full = url.charAt(0) === '/' ? base + url : url;
+        return '<span class="url-wrap"><a href="' + full + '" target="_blank" rel="noopener">' + txt + '</a>' + copyBtn + '</span>';
       });
       // bold
       h = h.replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>');
@@ -46,11 +47,13 @@
       // bare /uploads/ paths (image or file)
       h = h.replace(/(^|[\s(])(\/uploads\/[A-Za-z0-9._-]+)/g, (m, pre, p) => {
         const full = base + p;
-        if (IMG_EXT.test(p)) return pre + '<img class="attach" src="' + full + '" loading="lazy" />';
-        return pre + '<a class="attach-link" href="' + full + '" target="_blank" rel="noopener">' + full + '</a>';
+        if (IMG_EXT.test(p)) return pre + '<span class="attach-fig"><img class="attach" src="' + full + '" loading="lazy" />' + copyBtn + '</span>';
+        return pre + '<span class="url-wrap"><a class="attach-link" href="' + full + '" target="_blank" rel="noopener">' + full + '</a>' + copyBtn + '</span>';
       });
-      // bare http(s) image URLs
-      h = h.replace(/(https?:\/\/[^\s<>"']+\.(?:png|jpe?g|gif|webp|svg)(?:\?[^\s<>"']*)?)/gi, '<img class="attach" src="$1" loading="lazy" />');
+      // bare http(s) image URLs (not already inside a generated href/src)
+      h = h.replace(/(?<!["'=])(https?:\/\/[^\s<>"']+\.(?:png|jpe?g|gif|webp|svg)(?:\?[^\s<>"']*)?)/gi, (m, url) => {
+        return '<span class="attach-fig"><img class="attach" src="' + url + '" loading="lazy" />' + copyBtn + '</span>';
+      });
       return h;
     }
 
@@ -70,7 +73,7 @@
           i++;
         }
         if (i < lines.length) i++; // closing fence
-        out.push('<pre><code>' + buf.join('\n') + '</code></pre>');
+        out.push('<div class="code-block"><button class="copy-btn" title="Copy code">Copy</button><pre><code>' + buf.join('\n') + '</code></pre></div>');
         continue;
       }
 

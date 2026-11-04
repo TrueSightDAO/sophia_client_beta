@@ -277,6 +277,39 @@ html, body {
 .bubble th { background: rgba(0, 0, 0, 0.22); font-weight: 700; }
 .bubble strong { font-weight: 700; }
 
+/* copy buttons for links + code blocks */
+.url-wrap { display: inline-flex; align-items: center; gap: 2px; }
+.attach-fig { display: inline-flex; flex-direction: column; align-items: flex-start; gap: 2px; margin-top: 6px; }
+.url-copy {
+  background: rgba(0, 0, 0, 0.22);
+  border: none;
+  color: var(--muted);
+  cursor: pointer;
+  font-size: 11px;
+  padding: 1px 6px;
+  border-radius: 4px;
+  line-height: 1.2;
+}
+.url-copy:hover { color: var(--text); background: rgba(0, 0, 0, 0.4); }
+.url-copy.copied { color: var(--ok); }
+
+.code-block { position: relative; margin: 8px 0; }
+.code-block .copy-btn {
+  position: absolute;
+  top: 6px;
+  right: 6px;
+  background: rgba(255, 255, 255, 0.1);
+  border: 1px solid #4a4d55;
+  color: var(--muted);
+  cursor: pointer;
+  font-size: 11px;
+  padding: 2px 8px;
+  border-radius: 4px;
+  z-index: 1;
+}
+.code-block .copy-btn:hover { color: #fff; background: rgba(255, 255, 255, 0.2); }
+.code-block .copy-btn.copied { color: var(--ok); border-color: var(--ok); }
+
 .composer { display: flex; gap: 8px; padding: 12px 16px; border-top: 1px solid #26272b; align-items: flex-end; flex-shrink: 0; }
 .composer textarea {
   flex: 1;

@@ -25,6 +25,25 @@
     return role === 'governor' || role === 'sentinel';
   }
 
+  function copyToClipboard(text) {
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(text).catch(() => fallbackCopy(text));
+    } else {
+      fallbackCopy(text);
+    }
+  }
+
+  function fallbackCopy(text) {
+    const ta = document.createElement('textarea');
+    ta.value = text;
+    ta.style.position = 'fixed';
+    ta.style.opacity = '0';
+    document.body.appendChild(ta);
+    ta.select();
+    try { document.execCommand('copy'); } catch (e) { /* ignore */ }
+    document.body.removeChild(ta);
+  }
+
   function channelFromHash() {
     const h = (window.location.hash || '').replace(/^#/, '');
     if (h.indexOf('channel=') === 0) {
@@ -557,6 +576,26 @@
     el('identitySubmitBtn').addEventListener('click', onLinkIdentity);
     el('identityCancelBtn').addEventListener('click', closeIdentityModal);
     document.addEventListener('click', hideContextMenu);
+    document.addEventListener('click', (e) => {
+      const btn = e.target.closest('.url-copy, .copy-btn');
+      if (!btn) return;
+      let text;
+      if (btn.classList.contains('copy-btn')) {
+        const code = btn.parentElement.querySelector('code');
+        text = code ? code.textContent : '';
+      } else {
+        const wrap = btn.closest('.url-wrap, .attach-fig') || btn.parentElement;
+        const a = wrap.querySelector('a');
+        const img = wrap.querySelector('img');
+        text = a ? a.href : (img ? img.src : '');
+      }
+      if (!text) return;
+      copyToClipboard(text);
+      const orig = btn.textContent;
+      btn.textContent = '✓';
+      btn.classList.add('copied');
+      setTimeout(() => { btn.textContent = orig; btn.classList.remove('copied'); }, 1200);
+    });
     document.addEventListener('contextmenu', (e) => {
       if (!e.target.closest('.channel') && !e.target.closest('.category')) hideContextMenu();
     });
