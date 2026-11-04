@@ -21,12 +21,6 @@
     return pub.replace(/[\r\n=]/g, '').slice(0, 12);
   }
 
-  function escapeHtml(s) {
-    return String(s).replace(/[&<>"']/g, (c) => (
-      { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]
-    ));
-  }
-
   function isPrivileged(role) {
     return role === 'governor' || role === 'sentinel';
   }
@@ -188,30 +182,14 @@
     });
   }
 
-  /** Render message text, inlining image/file URLs. */
+  /** Render message text as Markdown (headings, code, lists, tables, images…). */
   function renderContent(text) {
-    const base = (config.sophiaBaseUrl || '').replace(/\/+$/, '');
-    const IMG = /\.(png|jpe?g|gif|webp|svg)(\?[^\s)]*)?$/i;
+    return window.SophiaMarkdown.renderMarkdown(text);
+  }
 
-    let html = escapeHtml(text);
-
-    // Markdown image: ![alt](url)
-    html = html.replace(/!\[([^\]]*)\]\((https?:\/\/[^\s)]+|\/uploads\/[^\s)]+)\)/g, (m, alt, url) => {
-      const full = url.charAt(0) === '/' ? base + url : url;
-      return '<img class="attach" src="' + full + '" alt="' + escapeHtml(alt) + '" loading="lazy" />';
-    });
-
-    // Bare /uploads/ paths (image or file)
-    html = html.replace(/(^|[\s(])(\/uploads\/[A-Za-z0-9._-]+)/g, (m, pre, p) => {
-      const full = base + p;
-      if (IMG.test(p)) return pre + '<img class="attach" src="' + full + '" loading="lazy" />';
-      return pre + '<a class="attach-link" href="' + full + '" target="_blank" rel="noopener">' + full + '</a>';
-    });
-
-    // Bare http(s) image URLs
-    html = html.replace(/(https?:\/\/[^\s<>"']+\.(?:png|jpe?g|gif|webp|svg)(?:\?[^\s<>"']*)?)/gi, '<img class="attach" src="$1" loading="lazy" />');
-
-    return html;
+  function scrollToBottom() {
+    const box = el('messages');
+    if (box) box.scrollTop = box.scrollHeight;
   }
 
   function appendMessage(who, text, opts) {
@@ -219,6 +197,16 @@
     const box = el('messages');
     const row = document.createElement('div');
     row.className = 'msg ' + who;
+    const stack = document.createElement('div');
+    stack.className = 'msg-stack';
+
+    if (who === 'you' || who === 'sophia') {
+      const sender = document.createElement('div');
+      sender.className = 'sender';
+      sender.textContent = who === 'you' ? 'You' : 'Sophia';
+      stack.appendChild(sender);
+    }
+
     const content = document.createElement('div');
     content.className = 'bubble';
     if (who === 'system') {
@@ -226,14 +214,15 @@
     } else {
       content.innerHTML = renderContent(text);
     }
-    row.appendChild(content);
+    stack.appendChild(content);
 
     if (who === 'sophia' && opts.reactive !== false) {
-      row.appendChild(buildReactionBar(text));
+      stack.appendChild(buildReactionBar(text));
     }
 
+    row.appendChild(stack);
     box.appendChild(row);
-    box.scrollTop = box.scrollHeight;
+    scrollToBottom();
     return content;
   }
 
@@ -334,11 +323,12 @@
             if (evt.response != null) thinking.innerHTML = renderContent(evt.response);
             break;
         }
-        el('messages').scrollTop = el('messages').scrollHeight;
+        requestAnimationFrame(scrollToBottom);
       },
       onDone(t) {
         if (t) thinking.innerHTML = renderContent(t);
         else if (!streamed.value) thinking.textContent = '(no reply)';
+        scrollToBottom();
       },
     };
   }
@@ -374,7 +364,7 @@
       }
       thinking.textContent = 'Error: ' + msg;
     }
-    el('messages').scrollTop = el('messages').scrollHeight;
+    scrollToBottom();
   }
 
   function updateAttachLabel() {
