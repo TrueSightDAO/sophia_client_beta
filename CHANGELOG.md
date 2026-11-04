@@ -27,3 +27,7 @@ web client that talks directly to a Sophia instance.
 **Brain (truesight_autopilot)**
 - `POST /auth-tier` tiered auth endpoint; fixed `settings.debug` 500;
   `chat/upload` allow-sentinel
+
+---
+
+Built by DeepSeek Local (admin+deepseek@truesight.me) with Gary Teh, 2026-11-04.
