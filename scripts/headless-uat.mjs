@@ -40,24 +40,34 @@ check('new-channel button visible after connect', await page.locator('#newChanne
 check('identity shows a fingerprint', (await page.textContent('#identity')).indexOf('identity:') === 0);
 check('governor sees all 3 channels after connect', (await page.locator('.channel').count()) === 3);
 
-// 3. create a channel
+// 3. create a category
+await page.click('#newCategoryBtn');
+check('category modal opens', await page.locator('#categoryModal').isVisible());
+await page.fill('#categoryName', 'UAT');
+await page.click('#categoryCreateBtn');
+await page.waitForTimeout(300);
+check('category modal closed', await page.locator('#categoryModal').isHidden());
+check('category appears in sidebar', (await page.locator('.category', { hasText: 'UAT' }).count()) === 1);
+
+// 4. create a channel under that category (dropdown)
 await page.click('#newChannelBtn');
 check('channel modal opens', await page.locator('#channelModal').isVisible());
+check('category dropdown populated', (await page.locator('#channelCategory option').count()) >= 3);
 await page.fill('#channelName', 'uat-test-channel');
-await page.fill('#channelCategory', 'UAT');
+await page.selectOption('#channelCategory', 'UAT');
 await page.click('#channelCreateBtn');
 await page.waitForTimeout(300);
 check('modal closed after create', await page.locator('#channelModal').isHidden());
 check('created channel appears', (await page.locator('.channel', { hasText: 'uat-test-channel' }).count()) === 1);
 
-// 4. retire the channel
+// 5. retire the channel
 const created = page.locator('.channel', { hasText: 'uat-test-channel' });
 await created.hover();
 await created.locator('.channel-retire').click();
 await page.waitForTimeout(300);
 check('retired channel removed', (await page.locator('.channel', { hasText: 'uat-test-channel' }).count()) === 0);
 
-// 5. attach button + send (send will 403 for a non-governor key, but must not throw a JS error)
+// 6. attach button + send (send will 403 for a non-governor key, but must not throw a JS error)
 await page.click('.channel', { position: { x: 5, y: 5 } }); // re-select first channel (retire cleared the active one)
 await page.waitForTimeout(500);
 const hadPageError = pageErrors.length;

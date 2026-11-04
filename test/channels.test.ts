@@ -67,4 +67,19 @@ describe('channel management', () => {
     const gov = Ch.visibleChannels(config, 'governor');
     expect(gov).toHaveLength(3);
   });
+
+  it('creates categories (idempotent) and lists them after config', () => {
+    expect(Ch.allCategories(config)).toEqual(['Ops', 'Public']);
+    expect(Ch.createCategory('Brazil')).toBe('Brazil');
+    expect(Ch.createCategory('Brazil')).toBe('Brazil'); // idempotent
+    expect(Ch.allCategories(config)).toEqual(['Ops', 'Public', 'Brazil']);
+  });
+
+  it('a channel created under a new category lands in allCategories', () => {
+    Ch.createCategory('Brazil');
+    Ch.createChannel('Brazil', 'sunmint-sigs', 'private');
+    expect(Ch.allCategories(config)).toContain('Brazil');
+    const all = Ch.allChannels(config);
+    expect(all.some((c: any) => c.categoryName === 'Brazil' && c.name === 'sunmint-sigs')).toBe(true);
+  });
 });

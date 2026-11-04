@@ -45,16 +45,18 @@
     window.SophiaChannels.visibleChannels(config, currentRole).forEach((ch) => {
       (byCat[ch.categoryName] = byCat[ch.categoryName] || []).push(ch);
     });
-    Object.keys(byCat).forEach((catName) => {
+    window.SophiaChannels.allCategories(config).forEach((catName) => {
       const catHeader = document.createElement('div');
       catHeader.className = 'category';
       catHeader.textContent = catName;
       sidebar.appendChild(catHeader);
-      byCat[catName].forEach((ch) => {
+      (byCat[catName] || []).forEach((ch) => {
         sidebar.appendChild(buildChannelItem(ch));
       });
     });
-    el('newChannelBtn').hidden = !isPrivileged(currentRole);
+    const priv = isPrivileged(currentRole);
+    el('newChannelBtn').hidden = !priv;
+    el('newCategoryBtn').hidden = !priv;
   }
 
   function buildChannelItem(ch) {
@@ -84,10 +86,17 @@
   }
 
   function openNewChannelModal() {
-    el('channelModal').hidden = false;
+    const sel = el('channelCategory');
+    sel.innerHTML = '';
+    window.SophiaChannels.allCategories(config).forEach((catName) => {
+      const opt = document.createElement('option');
+      opt.value = catName;
+      opt.textContent = catName;
+      sel.appendChild(opt);
+    });
     el('channelName').value = '';
-    el('channelCategory').value = '';
     el('channelVisibility').value = 'private';
+    el('channelModal').hidden = false;
     el('channelName').focus();
   }
 
@@ -97,13 +106,31 @@
 
   function onCreateChannel() {
     const name = el('channelName').value.trim();
-    const category = el('channelCategory').value.trim();
+    const category = el('channelCategory').value;
     if (!name) { el('channelName').focus(); return; }
     const visibility = el('channelVisibility').value;
     const ch = window.SophiaChannels.createChannel(category, name, visibility);
     closeNewChannelModal();
     renderChannelList();
     selectChannel(ch.id);
+  }
+
+  function openCategoryModal() {
+    el('categoryName').value = '';
+    el('categoryModal').hidden = false;
+    el('categoryName').focus();
+  }
+
+  function closeCategoryModal() {
+    el('categoryModal').hidden = true;
+  }
+
+  function onCreateCategory() {
+    const name = el('categoryName').value.trim();
+    if (!name) { el('categoryName').focus(); return; }
+    window.SophiaChannels.createCategory(name);
+    closeCategoryModal();
+    renderChannelList();
   }
 
   async function selectChannel(channelId) {
@@ -361,6 +388,9 @@
     el('newChannelBtn').addEventListener('click', openNewChannelModal);
     el('channelCreateBtn').addEventListener('click', onCreateChannel);
     el('channelCancelBtn').addEventListener('click', closeNewChannelModal);
+    el('newCategoryBtn').addEventListener('click', openCategoryModal);
+    el('categoryCreateBtn').addEventListener('click', onCreateCategory);
+    el('categoryCancelBtn').addEventListener('click', closeCategoryModal);
     boot();
   });
 })();

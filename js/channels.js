@@ -1,19 +1,20 @@
 /**
- * channels.js — the config-driven category/channel model + governor channel
- * management, with a localStorage overlay.
+ * channels.js — the config-driven category/channel model + governor management,
+ * with a localStorage overlay.
  *
- * Channel authority (locked with Gary): public channels viewable by guest;
- * private channels require governor/sentinel; channel creation/retirement is
- * governor/sentinel-only. Built-in channels come from `config.json`
- * (per-deployment); a governor/sentinel may create additional channels and
- * retire (hide) any channel. The overlay is stored in localStorage, so it is
- * per-browser — a server-side channel registry is a later PR.
+ * Channel/category authority (locked with Gary): public channels viewable by guest;
+ * private channels require governor/sentinel; channel + category creation/retirement
+ * is governor/sentinel-only. Built-in channels come from `config.json` (per-deployment);
+ * a governor/sentinel may create additional channels and categories, and retire
+ * (hide) any channel. The overlay is stored in localStorage, so it is per-browser —
+ * a server-side channel registry is a later PR.
  */
 (function () {
   'use strict';
 
   const LS_CREATED = 'sophia_channels_created';
   const LS_RETIRED = 'sophia_channels_retired';
+  const LS_CATEGORIES = 'sophia_categories_created';
 
   function flattenChannels(config) {
     const out = [];
@@ -44,6 +45,31 @@
   function setRetired(list) {
     try { localStorage.setItem(LS_RETIRED, JSON.stringify(list)); } catch (e) { /* quota */ }
   }
+  function getCreatedCategories() {
+    try { return JSON.parse(localStorage.getItem(LS_CATEGORIES) || '[]'); } catch (e) { return []; }
+  }
+  function setCreatedCategories(list) {
+    try { localStorage.setItem(LS_CATEGORIES, JSON.stringify(list)); } catch (e) { /* quota */ }
+  }
+
+  /** All categories = config category names + created (deduped, order-preserving). */
+  function allCategories(config) {
+    const built = (config.categories || []).map((c) => c.name);
+    const created = getCreatedCategories().filter((n) => built.indexOf(n) === -1);
+    return built.concat(created);
+  }
+
+  /** Create a category (idempotent by name). Returns the normalized name, or null if empty. */
+  function createCategory(name) {
+    const n = (name || '').trim();
+    if (!n) return null;
+    const list = getCreatedCategories();
+    if (list.indexOf(n) === -1) {
+      list.push(n);
+      setCreatedCategories(list);
+    }
+    return n;
+  }
 
   /** All channels = config (minus retired) + created (minus retired). */
   function allChannels(config) {
@@ -63,7 +89,7 @@
     return all.filter((ch) => ch.visibility !== 'private');
   }
 
-  /** Create a channel. A category name that doesn't exist yet becomes a new category. */
+  /** Create a channel under an existing category (name from the dropdown). */
   function createChannel(categoryName, name, visibility) {
     const id = 'ch_' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
     const ch = {
@@ -80,7 +106,7 @@
     return ch;
   }
 
-  /** Retire (hide) a channel. Built-in channels are hidden locally; created ones hidden too. */
+  /** Retire (hide) a channel. */
   function retireChannel(id) {
     const retired = getRetired();
     if (retired.indexOf(id) === -1) {
@@ -89,7 +115,6 @@
     }
   }
 
-  /** Restore a retired channel. */
   function restoreChannel(id) {
     setRetired(getRetired().filter((r) => r !== id));
   }
@@ -101,12 +126,15 @@
   window.SophiaChannels = {
     flattenChannels,
     allChannels,
+    allCategories,
     visibleChannels,
     createChannel,
+    createCategory,
     retireChannel,
     restoreChannel,
     isRetired,
     getCreated,
     getRetired,
+    getCreatedCategories,
   };
 })();

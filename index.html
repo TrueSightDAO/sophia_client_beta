@@ -18,7 +18,8 @@
       <div class="auth-banner" id="authBanner" hidden></div>
       <button id="connectBtn" class="connect">Connect identity</button>
       <div id="channelList" class="channel-list"></div>
-      <button id="newChannelBtn" class="new-channel" hidden>+ New channel</button>
+      <button id="newChannelBtn" class="new-channel" hidden>+ Channel</button>
+      <button id="newCategoryBtn" class="new-channel" hidden>+ Category</button>
       <div id="identity" class="identity"></div>
     </aside>
 
@@ -38,7 +39,9 @@
     <div class="modal-card">
       <h3>New channel</h3>
       <label>Name <input id="channelName" placeholder="e.g. sunmint-signatures" /></label>
-      <label>Category <input id="channelCategory" placeholder="e.g. Ops (blank = General)" /></label>
+      <label>Category
+        <select id="channelCategory"></select>
+      </label>
       <label>Visibility
         <select id="channelVisibility">
           <option value="private">private (governor/sentinel only)</option>
@@ -48,6 +51,17 @@
       <div class="modal-actions">
         <button id="channelCancelBtn">Cancel</button>
         <button id="channelCreateBtn" class="send">Create</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="categoryModal" class="modal" hidden>
+    <div class="modal-card">
+      <h3>New category</h3>
+      <label>Name <input id="categoryName" placeholder="e.g. Brazil" /></label>
+      <div class="modal-actions">
+        <button id="categoryCancelBtn">Cancel</button>
+        <button id="categoryCreateBtn" class="send">Create</button>
       </div>
     </div>
   </div>
