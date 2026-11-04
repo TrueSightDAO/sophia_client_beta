@@ -1,0 +1,38 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>TrueSight Ops Console</title>
+  <link rel="stylesheet" href="css/styles.css" />
+</head>
+<body>
+  <div class="app">
+    <aside class="sidebar">
+      <div class="brand">
+        <span id="appTitle">TrueSight Ops Console</span>
+        <span id="deployment" class="deployment"></span>
+      </div>
+      <div class="auth-banner" id="authBanner" hidden></div>
+      <button id="connectBtn" class="connect">Connect identity</button>
+      <div id="channelList" class="channel-list"></div>
+      <div id="identity" class="identity"></div>
+    </aside>
+
+    <main class="chat">
+      <header class="chat-header" id="chatHeader"># select a channel</header>
+      <div id="messages" class="messages"></div>
+      <div id="composer" class="composer" hidden>
+        <textarea id="messageInput" rows="1" placeholder="Message Sophia… (Enter to send, Shift+Enter for newline)"></textarea>
+        <button id="sendBtn" class="send">Send</button>
+      </div>
+    </main>
+  </div>
+
+  <script src="js/crypto.js"></script>
+  <script src="js/channels.js"></script>
+  <script src="js/auth.js"></script>
+  <script src="js/chat.js"></script>
+  <script src="js/app.js"></script>
+</body>
+</html>

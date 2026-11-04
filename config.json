@@ -1,0 +1,22 @@
+{
+  "sophiaBaseUrl": "https://sophia.truesight.me",
+  "deployment": "local",
+  "appTitle": "TrueSight Ops Console",
+  "categories": [
+    {
+      "id": "ops",
+      "name": "Ops",
+      "channels": [
+        { "id": "general", "name": "general", "visibility": "private" },
+        { "id": "sophia-commands", "name": "sophia-commands", "visibility": "private" }
+      ]
+    },
+    {
+      "id": "public",
+      "name": "Public",
+      "channels": [
+        { "id": "lobby", "name": "lobby", "visibility": "public" }
+      ]
+    }
+  ]
+}
