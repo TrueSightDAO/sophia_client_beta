@@ -64,7 +64,7 @@
       let detail = 'HTTP ' + resp.status;
       try {
         const j = await resp.json();
-        if (j && j.detail) detail = j.detail;
+        if (j && (j.detail || j.error)) detail = j.detail || j.error;
       } catch (e) { /* ignore */ }
       throw new Error(detail);
     }
@@ -133,7 +133,7 @@
       let detail = 'HTTP ' + resp.status;
       try {
         const j = await resp.json();
-        if (j && j.detail) detail = j.detail;
+        if (j && (j.detail || j.error)) detail = j.detail || j.error;
       } catch (e) { /* ignore */ }
       throw new Error(detail);
     }

@@ -487,7 +487,14 @@
     const input = el('messageInput');
     const text = input.value.trim();
     if ((!text && !pendingFiles.length) || !currentChannelId) return;
-    if (!token || !creds) { setAuthBanner('Not connected — connect first.', 'error'); return; }
+    if (!creds) { setAuthBanner('Not connected — connect first.', 'error'); return; }
+
+    try {
+      token = await window.SophiaAuth.ensureFreshToken();
+    } catch (e) {
+      setAuthBanner('Re-auth failed: ' + (e && e.message ? e.message : e), 'error');
+      return;
+    }
 
     const files = pendingFiles.slice();
     pendingFiles = [];
@@ -510,6 +517,24 @@
       const msg = e && e.message ? e.message : String(e);
       if (/403|governor|sentinel/i.test(msg)) {
         setAuthBanner('Send rejected — insufficient rights for this key. ' + msg, 'error');
+      }
+      // 401 = expired/invalid JWT — re-auth once and retry transparently.
+      if (/401/i.test(msg)) {
+        try {
+          token = await window.SophiaAuth.authenticate();
+          if (files.length) {
+            await window.SophiaChat.sendMessageWithFiles(currentChannelId, text, files, creds, cb);
+          } else {
+            await window.SophiaChat.sendMessage(currentChannelId, text, token, cb);
+          }
+          scrollToBottom();
+          return;
+        } catch (e2) {
+          const m2 = e2 && e2.message ? e2.message : String(e2);
+          thinking.textContent = 'Error: ' + m2;
+          scrollToBottom();
+          return;
+        }
       }
       thinking.textContent = 'Error: ' + msg;
     }

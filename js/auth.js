@@ -18,6 +18,7 @@
 
   const TOKEN_KEY = 'sophia_client_jwt';
   const ROLE_KEY = 'sophia_client_role';
+  const EXPIRY_KEY = 'sophia_client_jwt_expiry';
 
   function baseUrl() {
     const cfg = window.AppConfig || {};
@@ -66,6 +67,25 @@
   function clearAuth() {
     sessionStorage.removeItem(TOKEN_KEY);
     sessionStorage.removeItem(ROLE_KEY);
+    sessionStorage.removeItem(EXPIRY_KEY);
+  }
+
+  /** True if the stored JWT is still within its lifetime (with a 30s buffer). */
+  function isTokenFresh() {
+    const exp = sessionStorage.getItem(EXPIRY_KEY);
+    if (!exp) return false;
+    return Date.now() < parseInt(exp, 10) - 30000;
+  }
+
+  /**
+   * Return a valid token, re-authenticating if the current one is missing or
+   * near/at expiry. Used before every authenticated request so a long-lived tab
+   * never sends an expired JWT.
+   */
+  async function ensureFreshToken() {
+    if (isTokenFresh()) return getToken();
+    const auth = await authenticate();
+    return auth.token;
   }
 
   /**
@@ -93,8 +113,10 @@
     const body = await resp.json();
     if (!body.token) throw new Error('No token returned from /auth-tier');
     const role = body.author_role || 'guest';
+    const expiresAt = Date.now() + (body.expires_in || 1800) * 1000;
     sessionStorage.setItem(TOKEN_KEY, body.token);
     sessionStorage.setItem(ROLE_KEY, role);
+    sessionStorage.setItem(EXPIRY_KEY, String(expiresAt));
     return { token: body.token, role, publicKey };
   }
 
@@ -120,6 +142,8 @@
     getToken,
     getRole,
     isAuthenticated,
+    isTokenFresh,
+    ensureFreshToken,
     clearAuth,
   };
 })();
