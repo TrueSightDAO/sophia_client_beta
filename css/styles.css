@@ -239,6 +239,31 @@ details.msg-collapsed[open] > summary { margin-bottom: 6px; }
   border-bottom: 1px solid #26272b;
   font-weight: 700;
   flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+.chat-header .chat-title { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.sidebar-toggle {
+  display: none;
+  background: transparent;
+  border: none;
+  color: var(--text);
+  font-size: 20px;
+  line-height: 1;
+  padding: 2px 6px;
+  border-radius: 4px;
+  cursor: pointer;
+  flex: 0 0 auto;
+}
+.sidebar-toggle:hover { background: #35373c; }
+.sidebar-scrim {
+  display: none;
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.55);
+  z-index: 11;
 }
 
 .messages { flex: 1 1 0; min-height: 0; overflow-y: auto; padding: 16px; display: flex; flex-direction: column; gap: 8px; }
@@ -412,4 +437,49 @@ details.msg-collapsed[open] > summary { margin-bottom: 6px; }
 }
 .reaction:hover { background: #3a3b45; }
 .reaction.active { background: #2b3a55; border-color: var(--accent); color: #fff; }
+
+
+/* ---------------------------------------------------------------------------
+   Narrow / mobile layout (<= 820px)
+
+   The base layout is a fixed two-column grid (260px sidebar + 1fr chat). On a
+   390px phone that leaves the chat pane ~130px wide and collapses the composer
+   textarea to ~20px, which is unusable. Below 820px we switch to a single
+   column and turn the sidebar into an off-canvas drawer, toggled by the
+   hamburger button in the chat header.
+   --------------------------------------------------------------------------- */
+@media (max-width: 820px) {
+  .app { grid-template-columns: 1fr; }
+
+  .sidebar {
+    position: fixed;
+    top: 0;
+    left: 0;
+    bottom: 0;
+    width: min(82vw, 300px);
+    z-index: 12;
+    transform: translateX(-100%);
+    transition: transform 0.18s ease;
+    box-shadow: 2px 0 18px rgba(0, 0, 0, 0.45);
+    overflow-y: auto;
+  }
+  .sidebar.open { transform: none; }
+
+  .sidebar-scrim.show { display: block; }
+  .sidebar-toggle { display: inline-block; }
+
+  .chat { min-width: 0; }
+  .messages { padding: 12px; }
+  .msg-stack { max-width: 88%; }
+
+  .composer { padding: 10px 12px; gap: 6px; }
+  /* 16px keeps iOS Safari from zooming the viewport on focus */
+  .composer textarea { font-size: 16px; }
+  .composer .send { padding: 0 14px; }
+
+  /* let wide markdown tables wrap instead of forcing horizontal scroll */
+  .bubble th, .bubble td { white-space: normal; }
+
+  .modal-card { width: calc(100vw - 32px); max-width: 360px; }
+}
 
