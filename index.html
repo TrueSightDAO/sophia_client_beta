@@ -28,8 +28,14 @@
       <a id="cvLink" class="cv-link" href="#" target="_blank" rel="noopener noreferrer" hidden>My Credentials →</a>
     </aside>
 
+    <div id="sidebarScrim" class="sidebar-scrim"></div>
+
     <main class="chat">
-      <header class="chat-header" id="chatHeader"># select a channel</header>
+      <header class="chat-header">
+        <button id="sidebarToggleBtn" class="sidebar-toggle" type="button"
+                aria-label="Show channels" aria-expanded="false">&#9776;</button>
+        <span class="chat-title" id="chatHeader"># select a channel</span>
+      </header>
       <div id="messages" class="messages"></div>
       <div id="composer" class="composer" hidden>
         <button id="attachBtn" class="attach" title="Attach files">📎</button>

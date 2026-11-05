@@ -414,6 +414,7 @@
     setChannelHash(channelId);
     document.querySelectorAll('.channel').forEach((n) => n.classList.toggle('active', n.dataset.channelId === channelId));
     el('chatHeader').textContent = '#' + channelId;
+    closeSidebarDrawer();
     el('messages').innerHTML = '';
     appendMessage('system', 'Loading history…');
     try {
@@ -802,6 +803,21 @@
     }
   }
 
+  /* --- mobile sidebar drawer ------------------------------------------ */
+  function setSidebarDrawer(open) {
+    const sidebar = document.querySelector('.sidebar');
+    if (!sidebar) return;
+    sidebar.classList.toggle('open', !!open);
+    const scrim = el('sidebarScrim');
+    if (scrim) scrim.classList.toggle('show', !!open);
+    const btn = el('sidebarToggleBtn');
+    if (btn) btn.setAttribute('aria-expanded', open ? 'true' : 'false');
+  }
+
+  function closeSidebarDrawer() {
+    setSidebarDrawer(false);
+  }
+
   window.addEventListener('DOMContentLoaded', () => {
     el('connectBtn').addEventListener('click', onConnect);
     el('sendBtn').addEventListener('click', onSend);
@@ -819,6 +835,15 @@
     });
     el('messageInput').addEventListener('paste', onPaste);
     el('messageInput').addEventListener('input', autoResizeTextarea);
+    const sidebarToggleBtn = el('sidebarToggleBtn');
+    if (sidebarToggleBtn) {
+      sidebarToggleBtn.addEventListener('click', () => {
+        const sidebar = document.querySelector('.sidebar');
+        setSidebarDrawer(!(sidebar && sidebar.classList.contains('open')));
+      });
+    }
+    const sidebarScrim = el('sidebarScrim');
+    if (sidebarScrim) sidebarScrim.addEventListener('click', closeSidebarDrawer);
     el('newChannelBtn').addEventListener('click', openNewChannelModal);
     el('channelCreateBtn').addEventListener('click', onCreateChannel);
     el('channelCancelBtn').addEventListener('click', closeNewChannelModal);
@@ -852,7 +877,11 @@
     document.addEventListener('contextmenu', (e) => {
       if (!e.target.closest('.channel') && !e.target.closest('.category')) hideContextMenu();
     });
-    document.addEventListener('keydown', (e) => { if (e.key === 'Escape') hideContextMenu(); });
+    document.addEventListener('keydown', (e) => {
+      if (e.key !== 'Escape') return;
+      hideContextMenu();
+      closeSidebarDrawer();
+    });
     window.addEventListener('hashchange', () => {
       const wanted = channelFromHash();
       if (wanted && wanted !== currentChannelId && creds) {
