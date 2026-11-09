@@ -25,6 +25,44 @@
     const out = [];
     let i = 0;
 
+  // Linkify bare URLs. Anchors/images/code already produced above are split out
+  // first so a URL used as link text, an <img src> or a code span is never
+  // wrapped twice or linkified into broken HTML. Trailing punctuation is trimmed
+  // the way a human leaves it after pasting a link.
+  var AUTOLINK_RE = /(https?:\/\/[^\s<>"'`]+)/gi;
+  var WWW_RE = /(?<![\w.\/-])(www\.[^\s<>"'`]+)/gi;
+  var PROTECTED_RE = /(<a\s[^>]*>[\s\S]*?<\/a>|<img\b[^>]*>|<code>[\s\S]*?<\/code>)/g;
+
+  function autolink(html, copyBtn) {
+    var parts = html.split(PROTECTED_RE);
+    for (var i = 0; i < parts.length; i++) {
+      if (i % 2 === 1) continue; // protected: already an anchor / img / code
+      parts[i] = parts[i].replace(AUTOLINK_RE, function (m, url) {
+        var tail = (url.match(/[.,;:!?]+$/) || [''])[0];
+        var clean = tail ? url.slice(0, -tail.length) : url;
+        var trail = '';
+        while (clean.slice(-1) === ')' &&
+               (clean.split('(').length - 1) < (clean.split(')').length - 1)) {
+          clean = clean.slice(0, -1);
+          trail += ')';
+        }
+        if (clean.length < 12) return m; // not a plausible URL
+        return '<span class="url-wrap"><a class="autolink" href="' + clean +
+          '" target="_blank" rel="noopener noreferrer">' + clean +
+          '</a>' + copyBtn + '</span>' + trail + tail;
+      });
+      parts[i] = parts[i].replace(WWW_RE, function (m, url) {
+        var tail = (url.match(/[.,;:!?]+$/) || [''])[0];
+        var clean = tail ? url.slice(0, -tail.length) : url;
+        if (!clean) return m;
+        return '<span class="url-wrap"><a class="autolink" href="https://' + clean +
+          '" target="_blank" rel="noopener noreferrer">' + clean +
+          '</a>' + copyBtn + '</span>' + tail;
+      });
+    }
+    return parts.join('');
+  }
+
     function inline(s) {
       let h = escapeHtml(s);
       const copyBtn = '<button class="url-copy" title="Copy link" aria-label="Copy link">⧉</button>';
@@ -54,6 +92,7 @@
       h = h.replace(/(?<!["'=])(https?:\/\/[^\s<>"']+\.(?:png|jpe?g|gif|webp|svg)(?:\?[^\s<>"']*)?)/gi, (m, url) => {
         return '<span class="attach-fig"><img class="attach" src="' + url + '" loading="lazy" />' + copyBtn + '</span>';
       });
+      h = autolink(h, copyBtn);
       return h;
     }
 
