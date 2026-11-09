@@ -425,6 +425,130 @@ details.msg-collapsed[open] > summary { margin-bottom: 6px; }
   margin-top: 6px;
 }
 
+/* --- pending attachment previews (composer) ------------------------------ */
+.attach-preview {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  padding: 8px 8px 0;
+}
+.attach-chip {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  max-width: 240px;
+  padding: 4px 6px 4px 4px;
+  background: #2b2d31;
+  border: 1px solid #3a3d43;
+  border-radius: 8px;
+}
+.attach-chip img {
+  width: 40px;
+  height: 40px;
+  object-fit: cover;
+  border-radius: 6px;
+  flex: 0 0 40px;
+  display: block;
+}
+.attach-glyph {
+  width: 40px;
+  height: 40px;
+  flex: 0 0 40px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 6px;
+  background: #3a3d43;
+  color: var(--text, #e6e6e6);
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+}
+.attach-meta {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  line-height: 1.25;
+}
+.attach-name {
+  font-size: 12px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 150px;
+}
+.attach-size { font-size: 10px; opacity: 0.65; }
+.attach-remove {
+  background: transparent;
+  border: 0;
+  color: inherit;
+  opacity: 0.6;
+  cursor: pointer;
+  font-size: 16px;
+  line-height: 1;
+  padding: 0 2px;
+  flex: 0 0 auto;
+}
+.attach-remove:hover { opacity: 1; color: var(--error, #f04747); }
+
+/* --- file cards + PDF preview (message history) -------------------------- */
+.file-card {
+  display: inline-flex;
+  flex-direction: column;
+  gap: 4px;
+  margin-top: 6px;
+  max-width: 100%;
+}
+.file-card-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 10px;
+  background: #2b2d31;
+  border: 1px solid #3a3d43;
+  border-radius: 8px;
+  color: #8ab4ff;
+  text-decoration: none;
+  max-width: 100%;
+}
+.file-card-link:hover { background: #35373c; }
+.file-glyph {
+  flex: 0 0 34px;
+  height: 34px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 5px;
+  background: #3a3d43;
+  color: var(--text, #e6e6e6);
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+}
+.file-card.is-pdf .file-glyph { background: #7a2d2d; color: #ffd9d9; }
+.file-name {
+  font-size: 12px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 260px;
+}
+.pdf-preview-wrap { margin-top: 2px; }
+.pdf-preview-wrap > summary {
+  cursor: pointer;
+  font-size: 12px;
+  opacity: 0.75;
+}
+iframe.pdf-preview {
+  width: 100%;
+  max-width: 520px;
+  height: 320px;
+  margin-top: 6px;
+  border: 1px solid #3a3d43;
+  border-radius: 8px;
+  background: #1e1f22;
+}
+
 .reactions { display: flex; gap: 4px; align-items: center; padding-left: 2px; }
 .reaction {
   background: transparent;

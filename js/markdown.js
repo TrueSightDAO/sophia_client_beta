@@ -31,7 +31,7 @@
   // the way a human leaves it after pasting a link.
   var AUTOLINK_RE = /(https?:\/\/[^\s<>"'`]+)/gi;
   var WWW_RE = /(?<![\w.\/-])(www\.[^\s<>"'`]+)/gi;
-  var PROTECTED_RE = /(<a\s[^>]*>[\s\S]*?<\/a>|<img\b[^>]*>|<code>[\s\S]*?<\/code>)/g;
+  var PROTECTED_RE = /(<a\s[^>]*>[\s\S]*?<\/a>|<img\b[^>]*>|<iframe\b[^>]*>[\s\S]*?<\/iframe>|<code>[\s\S]*?<\/code>)/g;
 
   function autolink(html, copyBtn) {
     var parts = html.split(PROTECTED_RE);
@@ -63,6 +63,39 @@
     return parts.join('');
   }
 
+  // Non-image attachments currently render as a bare text link. Give them a
+  // file card instead (glyph + name + open-in-new-tab), and for PDFs an opt-in
+  // first-page preview so you can see what the document is.
+  var NON_IMAGE_EXT = /\.(pdf|docx?|xlsx?|pptx?|csv|txt|md|zip|json|log|rtf|odt)$/i;
+
+  function fileLabel(url) {
+    var clean = String(url || '').split('?')[0].split('#')[0];
+    var name = clean.split('/').pop() || clean;
+    try { name = decodeURIComponent(name); } catch (e) { /* keep raw */ }
+    return name;
+  }
+
+  function fileGlyph(name) {
+    var ext = (String(name).match(/\.([a-z0-9]+)$/i) || ['', 'file'])[1].toUpperCase();
+    return ext.length > 4 ? ext.slice(0, 4) : ext;
+  }
+
+  function fileCard(url, name, copyBtn) {
+    var label = name || fileLabel(url);
+    var isPdf = /\.pdf(\?|#|$)/i.test(url);
+    var card = '<span class="file-card' + (isPdf ? ' is-pdf' : '') + '">' +
+      '<a class="file-card-link" href="' + url + '" target="_blank" rel="noopener noreferrer">' +
+      '<span class="file-glyph">' + escapeHtml(fileGlyph(label)) + '</span>' +
+      '<span class="file-name">' + escapeHtml(label) + '</span>' +
+      '</a>' + copyBtn;
+    if (isPdf) {
+      card += '<details class="pdf-preview-wrap"><summary>Preview first page</summary>' +
+        '<iframe class="pdf-preview" src="' + url + '#page=1&view=FitH&toolbar=0" ' +
+        'loading="lazy" title="' + escapeHtml(label) + '"></iframe></details>';
+    }
+    return card + '</span>';
+  }
+
     function inline(s) {
       let h = escapeHtml(s);
       const copyBtn = '<button class="url-copy" title="Copy link" aria-label="Copy link">⧉</button>';
@@ -76,6 +109,7 @@
       // links [text](url)
       h = h.replace(/\[([^\]]+)\]\((https?:\/\/[^\s)]+|\/[^\s)]+)\)/g, (m, txt, url) => {
         const full = url.charAt(0) === '/' ? base + url : url;
+        if (NON_IMAGE_EXT.test(full)) return '<span class="url-wrap">' + fileCard(full, txt, copyBtn) + '</span>';
         return '<span class="url-wrap"><a href="' + full + '" target="_blank" rel="noopener">' + txt + '</a>' + copyBtn + '</span>';
       });
       // bold
@@ -86,7 +120,7 @@
       h = h.replace(/(^|[\s(])(\/uploads\/[A-Za-z0-9._-]+)/g, (m, pre, p) => {
         const full = base + p;
         if (IMG_EXT.test(p)) return pre + '<span class="attach-fig"><img class="attach" src="' + full + '" loading="lazy" />' + copyBtn + '</span>';
-        return pre + '<span class="url-wrap"><a class="attach-link" href="' + full + '" target="_blank" rel="noopener">' + full + '</a>' + copyBtn + '</span>';
+        return pre + '<span class="url-wrap">' + fileCard(full, fileLabel(full), copyBtn) + '</span>';
       });
       // bare http(s) image URLs (not already inside a generated href/src)
       h = h.replace(/(?<!["'=])(https?:\/\/[^\s<>"']+\.(?:png|jpe?g|gif|webp|svg)(?:\?[^\s<>"']*)?)/gi, (m, url) => {
