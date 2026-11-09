@@ -31,7 +31,7 @@
   // the way a human leaves it after pasting a link.
   var AUTOLINK_RE = /(https?:\/\/[^\s<>"'`]+)/gi;
   var WWW_RE = /(?<![\w.\/-])(www\.[^\s<>"'`]+)/gi;
-  var PROTECTED_RE = /(<a\s[^>]*>[\s\S]*?<\/a>|<img\b[^>]*>|<code>[\s\S]*?<\/code>)/g;
+  var PROTECTED_RE = /(<a\s[^>]*>[\s\S]*?<\/a>|<img\b[^>]*>|<iframe\b[^>]*>[\s\S]*?<\/iframe>|<code>[\s\S]*?<\/code>)/g;
 
   function autolink(html, copyBtn) {
     var parts = html.split(PROTECTED_RE);
