@@ -709,6 +709,7 @@
 
     const files = pendingFiles.slice();
     pendingFiles = [];
+    updateAttachLabel();
     resetComposer();
 
     if (text) appendMessage('you', text);
@@ -754,6 +755,92 @@
 
   function updateAttachLabel() {
     el('attachBtn').textContent = pendingFiles.length ? '📎 ' + pendingFiles.length : '📎';
+    renderAttachPreview();
+  }
+
+  // ---- pending attachment previews ---------------------------------------
+  // Before this, picking files only bumped the paperclip badge, so you had no
+  // idea *what* you had attached until after sending. Each pending file now
+  // renders as a chip with an image thumbnail (via an object URL) or a type
+  // glyph for non-images, plus size and a remove button.
+  const attachObjectUrls = [];
+
+  function formatBytes(n) {
+    if (n === undefined || n === null) return '';
+    if (n < 1024) return n + ' B';
+    if (n < 1024 * 1024) return Math.round(n / 1024) + ' KB';
+    return (n / (1024 * 1024)).toFixed(1) + ' MB';
+  }
+
+  function revokeAttachUrls() {
+    while (attachObjectUrls.length) {
+      try { URL.revokeObjectURL(attachObjectUrls.pop()); } catch (err) { /* ignore */ }
+    }
+  }
+
+  function renderAttachPreview() {
+    const box = el('attachPreview');
+    if (!box) return;
+    revokeAttachUrls();
+    box.innerHTML = '';
+    if (!pendingFiles.length) {
+      box.hidden = true;
+      return;
+    }
+    box.hidden = false;
+    pendingFiles.forEach((file, idx) => {
+      const name = file.name || 'file';
+      const type = String(file.type || '').toLowerCase();
+      const isImage = type.indexOf('image/') === 0 ||
+        /\.(png|jpe?g|gif|webp|svg|bmp|avif)$/i.test(name);
+      const isPdf = type === 'application/pdf' || /\.pdf$/i.test(name);
+
+      const chip = document.createElement('div');
+      chip.className = 'attach-chip';
+
+      if (isImage) {
+        chip.classList.add('is-image');
+        const img = document.createElement('img');
+        img.alt = name;
+        try {
+          const u = URL.createObjectURL(file);
+          attachObjectUrls.push(u);
+          img.src = u;
+        } catch (err) { /* leave broken src; chip still shows the name */ }
+        chip.appendChild(img);
+      } else {
+        const glyph = document.createElement('span');
+        glyph.className = 'attach-glyph';
+        glyph.textContent = isPdf ? 'PDF' : 'FILE';
+        chip.appendChild(glyph);
+      }
+
+      const meta = document.createElement('div');
+      meta.className = 'attach-meta';
+      const nm = document.createElement('span');
+      nm.className = 'attach-name';
+      nm.textContent = name;
+      nm.title = name;
+      const sz = document.createElement('span');
+      sz.className = 'attach-size';
+      sz.textContent = formatBytes(file.size);
+      meta.appendChild(nm);
+      meta.appendChild(sz);
+      chip.appendChild(meta);
+
+      const rm = document.createElement('button');
+      rm.type = 'button';
+      rm.className = 'attach-remove';
+      rm.title = 'Remove attachment';
+      rm.setAttribute('aria-label', 'Remove ' + name);
+      rm.textContent = '\u00d7';
+      rm.addEventListener('click', () => {
+        pendingFiles.splice(idx, 1);
+        updateAttachLabel();
+      });
+      chip.appendChild(rm);
+      box.appendChild(chip);
+    });
   }
 
   function autoResizeTextarea() {
