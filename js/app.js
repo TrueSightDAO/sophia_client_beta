@@ -9,7 +9,11 @@
   let currentRole = 'guest';
   let creds = null; // { publicKey, privateKey } (for signed upload path)
   let token = null; // JWT from /auth-tier (for text chat)
-  let pendingFiles = [];
+  // Pending attachments are kept PER CHANNEL, not globally. A single global
+  // array meant files picked in #general were still attached (and still
+  // previewed) after switching to another channel, and reappeared when you
+  // came back — the draft leaked across conversations.
+  let attachmentsByChannel = Object.create(null);
   let config = null;
 
   const REACTIONS = ['👍', '👀', '✅', '❌'];
@@ -412,6 +416,10 @@
   async function selectChannel(channelId) {
     currentChannelId = channelId;
     setChannelHash(channelId);
+    // Swap in this channel's own attachment draft (or an empty one). The
+    // previous channel's pick stays parked in the map, so returning to it
+    // restores the same previews.
+    updateAttachLabel();
     document.querySelectorAll('.channel').forEach((n) => n.classList.toggle('active', n.dataset.channelId === channelId));
     el('chatHeader').textContent = '#' + channelId;
     closeSidebarDrawer();
@@ -697,7 +705,7 @@
   async function onSend() {
     const input = el('messageInput');
     const text = input.value.trim();
-    if ((!text && !pendingFiles.length) || !currentChannelId) return;
+    if ((!text && !getPending().length) || !currentChannelId) return;
     if (!creds) { setAuthBanner('Not connected — connect first.', 'error'); return; }
 
     try {
@@ -707,8 +715,8 @@
       return;
     }
 
-    const files = pendingFiles.slice();
-    pendingFiles = [];
+    const files = getPending().slice();
+    clearPending();
     updateAttachLabel();
     resetComposer();
 
@@ -753,8 +761,39 @@
     scrollToBottom();
   }
 
+  // ---- per-channel attachment draft store --------------------------------
+  function draftKey() {
+    return currentChannelId || '__none__';
+  }
+
+  function getPending() {
+    const k = draftKey();
+    if (!attachmentsByChannel[k]) attachmentsByChannel[k] = [];
+    return attachmentsByChannel[k];
+  }
+
+  function setPending(list) {
+    attachmentsByChannel[draftKey()] = (list || []).filter(Boolean);
+    updateAttachLabel();
+  }
+
+  function clearPending() {
+    attachmentsByChannel[draftKey()] = [];
+  }
+
+  function totalPendingCount() {
+    let n = 0;
+    Object.keys(attachmentsByChannel).forEach((k) => { n += attachmentsByChannel[k].length; });
+    return n;
+  }
+
   function updateAttachLabel() {
-    el('attachBtn').textContent = pendingFiles.length ? '📎 ' + pendingFiles.length : '📎';
+    const files = getPending();
+    const elsewhere = totalPendingCount() - files.length;
+    el('attachBtn').textContent = files.length ? '📎 ' + files.length : '📎';
+    el('attachBtn').title = elsewhere
+      ? 'Attach files (this channel: ' + files.length + '; other channels: ' + elsewhere + ')'
+      : 'Attach files';
     renderAttachPreview();
   }
 
@@ -783,6 +822,7 @@
     if (!box) return;
     revokeAttachUrls();
     box.innerHTML = '';
+    const pendingFiles = getPending();
     if (!pendingFiles.length) {
       box.hidden = true;
       return;
@@ -835,8 +875,9 @@
       rm.setAttribute('aria-label', 'Remove ' + name);
       rm.textContent = '\u00d7';
       rm.addEventListener('click', () => {
-        pendingFiles.splice(idx, 1);
-        updateAttachLabel();
+        const list = getPending().slice();
+        list.splice(idx, 1);
+        setPending(list);
       });
       chip.appendChild(rm);
       box.appendChild(chip);
@@ -856,11 +897,27 @@
     updateAttachLabel();
   }
 
+  // Picking files ADDS to the current draft instead of replacing it, so the
+  // same input can be used repeatedly to build up several attachments. Files
+  // are de-duped on name+size+lastModified because picking the same file twice
+  // is almost always an accident.
   function onFilesChosen() {
     const input = el('fileInput');
-    pendingFiles = Array.from(input.files || []);
+    const chosen = Array.from(input.files || []);
     input.value = '';
-    updateAttachLabel();
+    if (!chosen.length) return;
+    const sig = (f) => [f.name, f.size, f.lastModified].join(':');
+    const seen = Object.create(null);
+    getPending().forEach((f) => { seen[sig(f)] = true; });
+    const merged = getPending().slice();
+    let dupes = 0;
+    chosen.forEach((f) => {
+      if (seen[sig(f)]) { dupes += 1; return; }
+      seen[sig(f)] = true;
+      merged.push(f);
+    });
+    setPending(merged);
+    if (dupes) setAuthBanner(dupes + ' file(s) already attached — skipped.', 'info');
   }
 
   function onPaste(e) {
@@ -869,8 +926,7 @@
     const files = window.SophiaChat.imageFilesFromClipboardItems(cd.items);
     if (!files.length) return;
     e.preventDefault();
-    pendingFiles = pendingFiles.concat(files);
-    updateAttachLabel();
+    setPending(getPending().concat(files));
   }
 
   async function boot() {
